@@ -19,8 +19,13 @@
 
 //------------------------------------------------------------------------------
 
-#include "gpsinfoMainDialog.h"
+#include <iostream>
+
 #include <QApplication>
+
+#include "gdal.h"
+
+#include "gpsinfoMainDialog.h"
 
 //------------------------------------------------------------------------------
 
@@ -33,6 +38,11 @@ int main(int argc, char *argv[])
 
 	gpsinfoMainDialog mainDialog;
 	mainDialog.show();
+
+    std::clog << std::endl << "Welcome to gpsinfo_create, part of gpsinfo (http://gpsinfo.org)!" << std::endl;
+    std::clog << "Running with qt " << qVersion() << " and "
+              << "gdal " << GDALVersionInfo("RELEASE_NAME") << "." << std::endl
+              << std::endl;
 
 	return a.exec();
 }
