@@ -25,6 +25,8 @@
 #include <QSettings>
 #include <QtXml>
 
+#include "gdal_priv.h"
+
 #include "gpsinfoMainDialog.h"
 #include "ui_gpsinfoMainDialog.h"
 
@@ -98,7 +100,14 @@ void gpsinfoMainDialog::reportError(const QString& message)
 void gpsinfoMainDialog::on_pushButton_create_clicked()
 {
 	ui->progressBar->setEnabled(true);
-	std::clog << "gpsinfoMainDialog::on_pushButton_create_clicked - not implemented yet." << std::endl;
+
+	if (!createTiles())
+	{
+		return;
+	}
+
+	return;
+
 
     const QString& title = ui->lineEdit_title->text();
     const QString& description = ui->lineEdit_description->text();
@@ -186,6 +195,114 @@ void gpsinfoMainDialog::on_pushButton_create_clicked()
      */
 
 	ui->progressBar->setEnabled(false);
+}
+
+//------------------------------------------------------------------------------
+
+bool gpsinfoMainDialog::createTiles()
+{
+	/*
+	 * Open input file
+	 */
+
+	GDALAllRegister();
+
+	GDALDataset *dataset = (GDALDataset *) GDALOpen(ui->lineEdit_input->text().toStdString().c_str(), GA_ReadOnly);
+	if (!dataset)
+	{
+		reportError("Failed to open '" + ui->lineEdit_input->text() + "'.");
+		return false;
+	}
+
+	if (dataset->GetRasterCount() < 1)
+	{
+		reportError("We require at least a single raster band in '" + ui->lineEdit_input->text() + "'.");
+		GDALClose(dataset);
+		return false;
+	}
+
+	GDALRasterBand *rasterBand = dataset->GetRasterBand(1);
+	if (!rasterBand)
+	{
+		reportError("We failed to retrieve the first raster band in '" + ui->lineEdit_input->text() + "'.");
+		GDALClose(dataset);
+		return false;
+	}
+
+	/*
+	 * Process input file
+	 */
+
+	const int nrXTotal = dataset->GetRasterXSize();
+	const int nrYTotal = dataset->GetRasterYSize();
+	double geoTransform[6];
+	dataset->GetGeoTransform(geoTransform);
+	const QPointF origin(geoTransform[0], geoTransform[1]);
+	const QPointF pixelSize(geoTransform[1], geoTransform[5]);
+	int hasNoDataValue;
+	float noDataValue = rasterBand->GetNoDataValue(&hasNoDataValue);
+	if (!hasNoDataValue)
+	{
+		noDataValue = -9999;
+	}
+
+	const int nrXTile = ui->spinBox_x->value();
+	const int nrYTile = ui->spinBox_y->value();
+
+	const int nrTilesX = ceil(((float) nrXTotal) / nrXTile);
+	const int nrTilesY = ceil(((float) nrYTotal) / nrYTile);
+
+	std::clog << "Importing " << nrXTotal << " x " << nrYTotal << " raster points "
+			  << "into " << nrTilesX << " x " << nrTilesY << " tiles, "
+			  << "each raster point of " << pixelSize.x() << " x " << pixelSize.y() << " pixel size with a "
+			  << "no data value of '" << noDataValue << "'."
+			  << std::endl;
+
+	ui->progressBar->setRange(0, nrTilesX*nrTilesY-1);
+	ui->progressBar->setValue(0);
+
+	std::vector< float > data(nrXTile*nrYTile);
+	for ( int col=0 ; col<nrTilesX ; ++col )
+	{
+		for ( int row=0 ; row<nrTilesY ; ++row )
+		{
+			ui->progressBar->setValue(col*nrTilesY + row);
+			QApplication::processEvents();
+
+			std::fill(data.begin(), data.end(), noDataValue);
+
+			int sizeX = std::min(nrXTile, nrXTotal - (col+1)*nrXTile);
+			int sizeY = std::min(nrYTile, nrYTotal - (row+1)*nrYTile);
+
+			CPLErr err = rasterBand->RasterIO(GF_Read,
+											  col*nrXTile,
+											  row*nrYTile,
+											  sizeX,
+											  sizeY,
+											  data.data(),
+											  nrXTile,
+											  nrYTile,
+											  GDT_Float32,
+											  0,
+											  0,
+											  nullptr);
+			if (err != CE_None)
+			{
+				reportError("We failed to read data from '" + ui->lineEdit_input->text() + "'.");
+				GDALClose(dataset);
+				return false;
+			}
+		}
+	}
+
+
+	/*
+	 * Epilogue
+	 */
+
+	GDALClose(dataset);
+
+	return true;
 }
 
 //------------------------------------------------------------------------------
