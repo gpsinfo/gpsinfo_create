@@ -67,6 +67,15 @@ private:
     //--------------------------------------------------------------------------
 
 	bool createTiles();
+    bool writeASC(const int,
+                  const int,
+                  const double,
+                  const double,
+                  const double,
+                  const double,
+                  const std::vector< float >&,
+                  const QString&,
+                  const bool);
 
 	//--------------------------------------------------------------------------
 
@@ -80,6 +89,12 @@ private:
 
 	QString m_filenameInput;
 	QString m_directoryOutput;
+    bool m_compress;
+
+    QString m_title;
+
+    int m_tileSizeX;
+    int m_tileSizeY;
 
 	//--------------------------------------------------------------------------
 };

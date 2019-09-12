@@ -41,8 +41,18 @@ gpsinfoMainDialog::gpsinfoMainDialog(QWidget *parent) :
 	QSettings settings;
 	m_filenameInput = settings.value("m_filenameInput", "").toString();
     ui->lineEdit_input->setText(m_filenameInput);
-	m_directoryOutput = settings.value("m_directoryOutput", "").toString();
+    m_directoryOutput = settings.value("m_directoryOutput", "").toString();
     ui->lineEdit_output->setText(m_directoryOutput);
+    m_compress = settings.value("m_compress", false).toBool();
+    ui->checkBox_compression->setChecked(m_compress);
+
+    m_title = settings.value("m_title", "LAYER_NAME").toString();
+    ui->lineEdit_title->setText(m_title);
+
+    m_tileSizeX = settings.value("m_tileSizeX", 512).toInt();
+    ui->spinBox_x->setValue(m_tileSizeX);
+    m_tileSizeY = settings.value("m_tileSizeY", 512).toInt();
+    ui->spinBox_y->setValue(m_tileSizeY);
 }
 
 //------------------------------------------------------------------------------
@@ -101,6 +111,17 @@ void gpsinfoMainDialog::on_pushButton_create_clicked()
 {
 	ui->progressBar->setEnabled(true);
 
+    m_compress = ui->checkBox_compression->isChecked();
+    QSettings().setValue("m_compress", m_compress);
+
+    m_title = ui->lineEdit_title->text();
+    QSettings().setValue("m_title", m_title);
+
+    m_tileSizeX = (unsigned int) ui->spinBox_x->value();
+    QSettings().setValue("m_tileSizeX", m_tileSizeX);
+    m_tileSizeY = (unsigned int) ui->spinBox_y->value();
+    QSettings().setValue("m_tileSizeY", m_tileSizeY);
+
 	if (!createTiles())
 	{
 		return;
@@ -109,7 +130,6 @@ void gpsinfoMainDialog::on_pushButton_create_clicked()
 	return;
 
 
-    const QString& title = ui->lineEdit_title->text();
     const QString& description = ui->lineEdit_description->text();
     const QString& copyright = ui->lineEdit_copyright->text();
     const QString& url = ui->lineEdit_URL->text();
@@ -119,8 +139,6 @@ void gpsinfoMainDialog::on_pushButton_create_clicked()
     const QString& country = ui->lineEdit_country->text();
     const QString& email = ui->lineEdit_email->text();
 
-    const unsigned int tileSizeX = (unsigned int) ui->spinBox_x->value();
-    const unsigned int tileSizeY = (unsigned int) ui->spinBox_y->value();
 
     QFile file(m_directoryOutput + "/gpsinfoWMTSCapabilities.xml");
     if (!file.open(QIODevice::WriteOnly| QIODevice::Text))
@@ -145,7 +163,7 @@ void gpsinfoMainDialog::on_pushButton_create_clicked()
      */
 
     xml.writeStartElement("ows:ServiceIdentification");
-    xml.writeTextElement("ows:Title", title);
+    xml.writeTextElement("ows:Title", m_title);
     xml.writeEndElement();
 
     /*
@@ -153,7 +171,7 @@ void gpsinfoMainDialog::on_pushButton_create_clicked()
      */
 
     xml.writeStartElement("ows:ServiceIdentification");
-    xml.writeTextElement("ows:Title", title);
+    xml.writeTextElement("ows:Title", m_title);
     xml.writeEndElement();
 
     /*
@@ -163,7 +181,7 @@ void gpsinfoMainDialog::on_pushButton_create_clicked()
     xml.writeStartElement("Contents");
 
     xml.writeStartElement("Layer");
-    xml.writeTextElement("ows:Title", "Layer for " + title);
+    xml.writeTextElement("ows:Title", "Layer for " + m_title);
     xml.writeEndElement();
 
     /*
@@ -171,7 +189,7 @@ void gpsinfoMainDialog::on_pushButton_create_clicked()
      */
 
     xml.writeStartElement("TileMatrixSet");
-    xml.writeTextElement("ows:Title", "Tiles for " + title);
+    xml.writeTextElement("ows:Title", "Tiles for " + m_title);
     xml.writeEndElement();
 
     xml.writeEndElement();
@@ -189,16 +207,15 @@ void gpsinfoMainDialog::on_pushButton_create_clicked()
 
     file.close();
 
-    /* For compressing the asc tiles, we could use
-     *      QByteArray::qCompress
-     * which uses zlib.
-     */
-
 	ui->progressBar->setEnabled(false);
 }
 
 //------------------------------------------------------------------------------
 
+/*! \brief Split the input file into tiles
+ *
+ * \return True on success, false otherwise.
+ */
 bool gpsinfoMainDialog::createTiles()
 {
 	/*
@@ -237,17 +254,25 @@ bool gpsinfoMainDialog::createTiles()
 	const int nrYTotal = dataset->GetRasterYSize();
 	double geoTransform[6];
 	dataset->GetGeoTransform(geoTransform);
-	const QPointF origin(geoTransform[0], geoTransform[1]);
+    /* The coordinates of the upper left corner of the upper left pixel (0,0) */
+    const QPointF origin(geoTransform[0], geoTransform[1]);
 	const QPointF pixelSize(geoTransform[1], geoTransform[5]);
+    if (fabs(fabs(pixelSize.x()) - fabs(pixelSize.y())) > 1e-8)
+    {
+        reportError("We support raster data sets with square pixels only.");
+        GDALClose(dataset);
+        return false;
+    }
+
 	int hasNoDataValue;
-	float noDataValue = rasterBand->GetNoDataValue(&hasNoDataValue);
+    double noDataValue = rasterBand->GetNoDataValue(&hasNoDataValue);
 	if (!hasNoDataValue)
 	{
 		noDataValue = -9999;
 	}
 
-	const int nrXTile = ui->spinBox_x->value();
-	const int nrYTile = ui->spinBox_y->value();
+    const int nrXTile = m_tileSizeX;
+    const int nrYTile = m_tileSizeY;
 
 	const int nrTilesX = ceil(((float) nrXTotal) / nrXTile);
 	const int nrTilesY = ceil(((float) nrYTotal) / nrYTile);
@@ -264,27 +289,32 @@ bool gpsinfoMainDialog::createTiles()
 	std::vector< float > data(nrXTile*nrYTile);
 	for ( int col=0 ; col<nrTilesX ; ++col )
 	{
+        QString pathCol = QString(ui->lineEdit_output->text() + "/" + ui->lineEdit_title->text() + "/%1").arg(col);
+        QDir().mkpath(pathCol);
+        const double xllCorner = origin.x() + col*nrXTile*pixelSize.x();
+
 		for ( int row=0 ; row<nrTilesY ; ++row )
 		{
 			ui->progressBar->setValue(col*nrTilesY + row);
 			QApplication::processEvents();
 
-			std::fill(data.begin(), data.end(), noDataValue);
+            std::fill(data.begin(), data.end(), noDataValue);
 
 			int sizeX = std::min(nrXTile, nrXTotal - (col+1)*nrXTile);
 			int sizeY = std::min(nrYTile, nrYTotal - (row+1)*nrYTile);
 
+            /* Stores data "in left to right, top to bottom pixel order". */
 			CPLErr err = rasterBand->RasterIO(GF_Read,
 											  col*nrXTile,
 											  row*nrYTile,
 											  sizeX,
 											  sizeY,
 											  data.data(),
-											  nrXTile,
-											  nrYTile,
+                                              sizeX,
+                                              sizeY,
 											  GDT_Float32,
 											  0,
-											  0,
+                                              sizeof(float)*nrXTile,
 											  nullptr);
 			if (err != CE_None)
 			{
@@ -292,6 +322,23 @@ bool gpsinfoMainDialog::createTiles()
 				GDALClose(dataset);
 				return false;
 			}
+
+            const double yllCorner = origin.y() + (row+1)*nrYTile*pixelSize.y();
+            const QString filenameASC = QString(pathCol + "/%1.asc").arg(row);
+            if (!writeASC(nrXTile,
+                          nrYTile,
+                          xllCorner,
+                          yllCorner,
+                          fabs(pixelSize.x()),
+                          noDataValue,
+                          data,
+                          filenameASC,
+                          ui->checkBox_compression->isChecked()))
+            {
+                reportError("We failed to write tile '" + filenameASC + "'.");
+                GDALClose(dataset);
+                return false;
+            }
 		}
 	}
 
@@ -303,6 +350,54 @@ bool gpsinfoMainDialog::createTiles()
 	GDALClose(dataset);
 
 	return true;
+}
+
+//------------------------------------------------------------------------------
+
+bool gpsinfoMainDialog::writeASC(
+        const int nrXTile,
+        const int nrYTile,
+        const double xllCorner,
+        const double yllCorner,
+        const double cellSize,
+        const double noDataValue,
+        const std::vector< float >& data,
+        const QString& filenameASC,
+        const bool compression)
+{
+    if (compression)
+    {
+        reportError("We do not yet support compression.");
+        return false;
+    }
+
+    QString asc;
+    QTextStream ascStream(&asc);
+    ascStream << "NCOLS " << nrXTile << "\n"
+              << "NROWS " << nrYTile << "\n"
+              << "XLLCORNER " << xllCorner << "\n"
+              << "YLLCORNER " << yllCorner << "\n"
+              << "CELLSIZE " << cellSize << "\n"
+              << "NODATA_VALUE " << noDataValue << "\n";
+
+    for ( int row=0 ; row<nrYTile ; ++row )
+    {
+        for ( int col=0 ; col<nrXTile ; ++col )
+        {
+            ascStream << data[row*nrXTile + col] << " ";
+        }
+        ascStream << "\n";
+    }
+
+    QSaveFile file(compression ? filenameASC + ".zip" : filenameASC);
+    if (!file.open(QIODevice::WriteOnly))
+    {
+        return false;
+    }
+    file.write(asc.toUtf8());
+    file.commit();
+
+    return true;
 }
 
 //------------------------------------------------------------------------------

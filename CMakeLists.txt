@@ -69,7 +69,7 @@ set(GPSINFO_CREATE_HEADERS
 )
 
 set(GPSINFO_CREATE_UI
-	gpsinfoMainDialog.ui
+	src/gpsinfoMainDialog.ui
 )
 
 #-------------------------------------------------------------------------------
