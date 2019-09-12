@@ -75,6 +75,7 @@ private:
                   const double,
                   const std::vector< float >&,
                   const QString&,
+                  const QString&,
                   const bool);
 
 	//--------------------------------------------------------------------------

@@ -324,7 +324,7 @@ bool gpsinfoMainDialog::createTiles()
 			}
 
             const double yllCorner = origin.y() + (row+1)*nrYTile*pixelSize.y();
-            const QString filenameASC = QString(pathCol + "/%1.asc").arg(row);
+            const QString filenameASC = QString("%1.asc").arg(row);
             if (!writeASC(nrXTile,
                           nrYTile,
                           xllCorner,
@@ -332,6 +332,7 @@ bool gpsinfoMainDialog::createTiles()
                           fabs(pixelSize.x()),
                           noDataValue,
                           data,
+                          pathCol,
                           filenameASC,
                           ui->checkBox_compression->isChecked()))
             {
@@ -362,15 +363,10 @@ bool gpsinfoMainDialog::writeASC(
         const double cellSize,
         const double noDataValue,
         const std::vector< float >& data,
+        const QString& pathCol,
         const QString& filenameASC,
         const bool compression)
 {
-    if (compression)
-    {
-        reportError("We do not yet support compression.");
-        return false;
-    }
-
     QString asc;
     QTextStream ascStream(&asc);
     ascStream << "NCOLS " << nrXTile << "\n"
@@ -389,13 +385,33 @@ bool gpsinfoMainDialog::writeASC(
         ascStream << "\n";
     }
 
-    QSaveFile file(compression ? filenameASC + ".zip" : filenameASC);
-    if (!file.open(QIODevice::WriteOnly))
+    if (compression)
     {
-        return false;
+        /* We utilize GDAL's virtual file system to write to a zip file, see
+         *      https://gdal.org/user/virtual_file_systems.html
+         * and
+         *      https://gdal.org/api/cpl.html
+         * for information.
+         */
+        QString filenameZIP = "/vsizip/" + pathCol + "/" + filenameASC + ".zip";
+        std::clog << filenameZIP.toStdString() << std::endl;
+        VSILFILE* fileZIP = VSIFOpenL(filenameZIP.toStdString().c_str(), "wb");
+        VSILFILE* fileASCinZIP = VSIFOpenL((filenameZIP + "/" + filenameASC).toStdString().c_str(), "wb");
+        std::string ascSTL = asc.toStdString();
+        VSIFWriteL(ascSTL.c_str(), sizeof(char), ascSTL.size(), fileASCinZIP);
+        VSIFCloseL(fileASCinZIP);
+        VSIFCloseL(fileZIP);
     }
-    file.write(asc.toUtf8());
-    file.commit();
+    else
+    {
+        QSaveFile file(filenameASC);
+        if (!file.open(QIODevice::WriteOnly))
+        {
+            return false;
+        }
+        file.write(asc.toUtf8());
+        file.commit();
+    }
 
     return true;
 }
