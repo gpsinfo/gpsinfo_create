@@ -68,9 +68,6 @@ set(GPSINFO_CREATE_HEADERS
 	src/gpsinfoMainDialog.h
 )
 
-# The following requires cmake 3.9 and renders it unnecessary to add the UI 
-# files to 'add_executable'
-set(CMAKE_AUTOUIC_SEARCH_PATHS "./ui")
 set(GPSINFO_CREATE_UI
 	gpsinfoMainDialog.ui
 )
@@ -84,6 +81,7 @@ set(GPSINFO_CREATE_UI
 add_executable(gpsinfo_create
     ${GPSINFO_CREATE_SOURCES}
     ${GPSINFO_CREATE_HEADERS}
+	${GPSINFO_CREATE_UI}
 )
 
 target_link_libraries(gpsinfo_create 
