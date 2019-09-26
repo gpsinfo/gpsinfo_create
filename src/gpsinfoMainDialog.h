@@ -90,15 +90,6 @@ private:
 
 	//--------------------------------------------------------------------------
 
-	QString m_filenameInput;
-	QString m_directoryOutput;
-    bool m_compress;
-
-    QString m_title;
-
-    int m_tileSizeX;
-    int m_tileSizeY;
-
 	//--------------------------------------------------------------------------
 };
 

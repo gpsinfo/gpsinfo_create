@@ -38,21 +38,23 @@ gpsinfoMainDialog::gpsinfoMainDialog(QWidget *parent) :
 {
 	ui->setupUi(this);
 
-	QSettings settings;
-	m_filenameInput = settings.value("m_filenameInput", "").toString();
-    ui->lineEdit_input->setText(m_filenameInput);
-    m_directoryOutput = settings.value("m_directoryOutput", "").toString();
-    ui->lineEdit_output->setText(m_directoryOutput);
-    m_compress = settings.value("m_compress", false).toBool();
-    ui->checkBox_compression->setChecked(m_compress);
+    QSettings settings;
+    ui->lineEdit_input->setText(settings.value("filenameInput", "").toString());
+    ui->lineEdit_output->setText(settings.value("directoryOutput", "").toString());
+    ui->checkBox_compression->setChecked(settings.value("compress", false).toBool());
 
-    m_title = settings.value("m_title", "LAYER_NAME").toString();
-    ui->lineEdit_title->setText(m_title);
+    ui->lineEdit_title->setText(settings.value("title", "").toString());
+    ui->lineEdit_description->setText(settings.value("description", "").toString());
+    ui->lineEdit_copyright->setText(settings.value("copyright", "").toString());
+    ui->lineEdit_URL->setText(settings.value("url", "").toString());
 
-    m_tileSizeX = settings.value("m_tileSizeX", 512).toInt();
-    ui->spinBox_x->setValue(m_tileSizeX);
-    m_tileSizeY = settings.value("m_tileSizeY", 512).toInt();
-    ui->spinBox_y->setValue(m_tileSizeY);
+    ui->lineEdit_name->setText(settings.value("name", "").toString());
+    ui->lineEdit_city->setText(settings.value("city", "").toString());
+    ui->lineEdit_country->setText(settings.value("country", "").toString());
+    ui->lineEdit_email->setText(settings.value("email", "").toString());
+
+    ui->spinBox_x->setValue(settings.value("tileSizeX", 512).toInt());
+    ui->spinBox_y->setValue(settings.value("tileSizeY", 512).toInt());
 }
 
 //------------------------------------------------------------------------------
@@ -73,28 +75,28 @@ void gpsinfoMainDialog::on_pushButton_quit_clicked()
 
 void gpsinfoMainDialog::on_pushButton_input_clicked()
 {
-    QString filename = QFileDialog::getOpenFileName(this, "Select Input File", m_filenameInput);
+    QSettings settings;
+    QString filename = QFileDialog::getOpenFileName(this, "Select Input File", settings.value("filenameInput").toString());
     if (filename.isNull())
     {
         return;
     }
-    m_filenameInput = filename;
-    QSettings().setValue("m_filenameInput", m_filenameInput);
-    ui->lineEdit_input->setText(m_filenameInput);
+    settings.setValue("filenameInput", filename);
+    ui->lineEdit_input->setText(filename);
 }
 
 //------------------------------------------------------------------------------
 
 void gpsinfoMainDialog::on_pushButton_output_clicked()
 {
-    QString directory = QFileDialog::getExistingDirectory(this, "Select Output File", m_directoryOutput);
+    QSettings settings;
+    QString directory = QFileDialog::getExistingDirectory(this, "Select Output Directory", settings.value("directoryOutput").toString());
     if (directory.isNull())
     {
         return;
     }
-    m_directoryOutput = directory;
-    QSettings().setValue("m_directoryOutput", m_directoryOutput);
-    ui->lineEdit_output->setText(m_directoryOutput);
+    settings.setValue("directoryOutput", directory);
+    ui->lineEdit_output->setText(directory);
 }
 
 //------------------------------------------------------------------------------
@@ -111,36 +113,40 @@ void gpsinfoMainDialog::on_pushButton_create_clicked()
 {
 	ui->progressBar->setEnabled(true);
 
-    m_compress = ui->checkBox_compression->isChecked();
-    QSettings().setValue("m_compress", m_compress);
+    /*
+     * Write tiles
+     */
 
-    m_title = ui->lineEdit_title->text();
-    QSettings().setValue("m_title", m_title);
+    if (!createTiles())
+    {
+        return;
+    }
 
-    m_tileSizeX = (unsigned int) ui->spinBox_x->value();
-    QSettings().setValue("m_tileSizeX", m_tileSizeX);
-    m_tileSizeY = (unsigned int) ui->spinBox_y->value();
-    QSettings().setValue("m_tileSizeY", m_tileSizeY);
+    /*
+     * Settings
+     */
 
-	if (!createTiles())
-	{
-		return;
-	}
+    QSettings settings;
+    settings.setValue("compress", ui->checkBox_compression->isChecked());
 
-	return;
+    settings.setValue("title", ui->lineEdit_title->text());
+    settings.setValue("description", ui->lineEdit_description->text());
+    settings.setValue("copyright", ui->lineEdit_copyright->text());
+    settings.setValue("url", ui->lineEdit_URL->text());
 
+    settings.setValue("name", ui->lineEdit_name->text());
+    settings.setValue("city", ui->lineEdit_city->text());
+    settings.setValue("country", ui->lineEdit_country->text());
+    settings.setValue("email", ui->lineEdit_email->text());
 
-    const QString& description = ui->lineEdit_description->text();
-    const QString& copyright = ui->lineEdit_copyright->text();
-    const QString& url = ui->lineEdit_URL->text();
+    settings.setValue("tileSizeX", ui->spinBox_x->value());
+    settings.setValue("tileSizeY", ui->spinBox_y->value());
 
-    const QString& name = ui->lineEdit_name->text();
-    const QString& city = ui->lineEdit_city->text();
-    const QString& country = ui->lineEdit_country->text();
-    const QString& email = ui->lineEdit_email->text();
+    /*
+     * XML file
+     */
 
-
-    QFile file(m_directoryOutput + "/gpsinfoWMTSCapabilities.xml");
+    QFile file(ui->lineEdit_output->text() + "/gpsinfoWMTSCapabilities.xml");
     if (!file.open(QIODevice::WriteOnly| QIODevice::Text))
     {
         reportError("Failed to open " + file.fileName() + " for writing.");
@@ -163,34 +169,82 @@ void gpsinfoMainDialog::on_pushButton_create_clicked()
      */
 
     xml.writeStartElement("ows:ServiceIdentification");
-    xml.writeTextElement("ows:Title", m_title);
+        xml.writeTextElement("ows:Title", ui->lineEdit_title->text());
+        xml.writeStartElement("ows:Keywords");
+            xml.writeTextElement("ows:Keyword", "gpsinfo");
+        xml.writeEndElement();
+        xml.writeTextElement("ows:ServiceType", "OGC WMTS");
+        xml.writeTextElement("ows:ServiceTypeVersion", "2.0");
+        xml.writeTextElement("ows:Fees", "none");
+        xml.writeTextElement("ows:AccessConstraints", "https://creativecommons.org/licenses/by/4.0/");
     xml.writeEndElement();
 
     /*
      * ows:ServiceProvider
      */
 
-    xml.writeStartElement("ows:ServiceIdentification");
-    xml.writeTextElement("ows:Title", m_title);
+    xml.writeStartElement("ows:ServiceProvider");
+        xml.writeTextElement("ows:ProviderName", "Rechenraum GmbH");
+        xml.writeStartElement("ows:ProviderSite");
+            xml.writeAttribute("xlink:href", "https://www.rechenraum.com");
+        xml.writeEndElement();
+        xml.writeStartElement("ows:ServiceContact");
+            xml.writeStartElement("ows:ContactInfo");
+                xml.writeStartElement("ows:Address");
+                    xml.writeTextElement("ows:City", "Vienna");
+                    xml.writeTextElement("ows:Country", "Austria");
+                    xml.writeTextElement("ows:ElectronicMailAddress", "office@rechenraum.com");
+                xml.writeEndElement();
+            xml.writeEndElement();
+        xml.writeEndElement();
     xml.writeEndElement();
+
+    /*
+     * Contents
+     */
+
+    xml.writeStartElement("Contents");
 
     /*
      * Contents - Layer
      */
 
-    xml.writeStartElement("Contents");
-
-    xml.writeStartElement("Layer");
-    xml.writeTextElement("ows:Title", "Layer for " + m_title);
-    xml.writeEndElement();
+        xml.writeStartElement("Layer");
+            xml.writeTextElement("ows:Title", ui->lineEdit_title->text());
+            xml.writeTextElement("ows:Abstract", ui->lineEdit_description->text());
+            xml.writeTextElement("ows:Identifier", titleAsDirectory());
+            xml.writeStartElement("Style");
+                xml.writeAttribute("isDefault", "true");
+            xml.writeEndElement();
+            xml.writeTextElement("Format", ui->checkBox_compression->isChecked() ? "application/zip" : "text/plain");
+            xml.writeStartElement("TileMatrixSetLink");
+                xml.writeTextElement("TileMatrixSet", titleAsDirectory());
+            xml.writeEndElement();
+            xml.writeStartElement("ResourceURL");
+                xml.writeAttribute("format", ui->checkBox_compression->isChecked() ? "application/zip" : "text/plain");
+                xml.writeAttribute("resourceType", "tile");
+                xml.writeAttribute("template", ui->lineEdit_URL->text() + "/" + titleAsDirectory() + "/{TileCol}/{TileRow}" + (ui->checkBox_compression->isChecked() ? ".asc.zip" : ".asc"));
+            xml.writeEndElement();
+        xml.writeEndElement();
 
     /*
      * Contents - TileMatrixSet
      */
 
-    xml.writeStartElement("TileMatrixSet");
-    xml.writeTextElement("ows:Title", "Tiles for " + m_title);
-    xml.writeEndElement();
+        xml.writeStartElement("TileMatrixSet");
+        xml.writeTextElement("ows:Title", titleAsDirectory());
+        xml.writeTextElement("ows:Identifier", titleAsDirectory());
+        xml.writeTextElement("ows:SupportedCRS", QString("urn:ogc:def:crs:EPSG::") + "TODO");
+        xml.writeStartElement("TileMatrixSet");
+            xml.writeTextElement("ows:Identifier", "TODO");
+            xml.writeTextElement("ScaleDenominator", "TODO");
+            xml.writeTextElement("TopLeftCorner", "TODO");
+            xml.writeTextElement("TileWidth", "TODO");
+            xml.writeTextElement("TileHeight", "TODO");
+            xml.writeTextElement("MatrixWidth", "TODO");
+            xml.writeTextElement("MatrixHeight", "TODO");
+        xml.writeEndElement();
+        xml.writeEndElement();
 
     xml.writeEndElement();
 
@@ -199,7 +253,7 @@ void gpsinfoMainDialog::on_pushButton_create_clicked()
      */
 
     xml.writeStartElement("ServiceMetadataURL");
-    xml.writeAttribute("xlink:href", url);
+        xml.writeAttribute("xlink:href", ui->lineEdit_URL->text());
     xml.writeEndElement();
 
     xml.writeEndElement();
@@ -271,8 +325,8 @@ bool gpsinfoMainDialog::createTiles()
 		noDataValue = -9999;
 	}
 
-    const int nrXTile = m_tileSizeX;
-    const int nrYTile = m_tileSizeY;
+    const int nrXTile = ui->spinBox_x->value();
+    const int nrYTile = ui->spinBox_y->value();
 
 	const int nrTilesX = ceil(((float) nrXTotal) / nrXTile);
 	const int nrTilesY = ceil(((float) nrYTotal) / nrYTile);
