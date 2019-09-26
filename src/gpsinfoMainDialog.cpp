@@ -212,13 +212,13 @@ void gpsinfoMainDialog::on_pushButton_create_clicked()
         xml.writeStartElement("Layer");
             xml.writeTextElement("ows:Title", ui->lineEdit_title->text());
             xml.writeTextElement("ows:Abstract", ui->lineEdit_description->text());
-            xml.writeTextElement("ows:Identifier", titleAsDirectory());
+            xml.writeTextElement("ows:Identifier", ui->lineEdit_title->text());
             xml.writeStartElement("Style");
                 xml.writeAttribute("isDefault", "true");
             xml.writeEndElement();
             xml.writeTextElement("Format", ui->checkBox_compression->isChecked() ? "application/zip" : "text/plain");
             xml.writeStartElement("TileMatrixSetLink");
-                xml.writeTextElement("TileMatrixSet", titleAsDirectory());
+                xml.writeTextElement("TileMatrixSet", ui->lineEdit_title->text());
             xml.writeEndElement();
             xml.writeStartElement("ResourceURL");
                 xml.writeAttribute("format", ui->checkBox_compression->isChecked() ? "application/zip" : "text/plain");
@@ -232,8 +232,8 @@ void gpsinfoMainDialog::on_pushButton_create_clicked()
      */
 
         xml.writeStartElement("TileMatrixSet");
-        xml.writeTextElement("ows:Title", titleAsDirectory());
-        xml.writeTextElement("ows:Identifier", titleAsDirectory());
+        xml.writeTextElement("ows:Title", ui->lineEdit_title->text());
+        xml.writeTextElement("ows:Identifier", ui->lineEdit_title->text());
         xml.writeTextElement("ows:SupportedCRS", QString("urn:ogc:def:crs:EPSG::") + "TODO");
         xml.writeStartElement("TileMatrixSet");
             xml.writeTextElement("ows:Identifier", "TODO");
