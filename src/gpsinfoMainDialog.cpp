@@ -255,7 +255,7 @@ bool gpsinfoMainDialog::createTiles()
 	double geoTransform[6];
 	dataset->GetGeoTransform(geoTransform);
     /* The coordinates of the upper left corner of the upper left pixel (0,0) */
-    const QPointF origin(geoTransform[0], geoTransform[1]);
+    const QPointF originUpperLeft(geoTransform[0], geoTransform[3]);
 	const QPointF pixelSize(geoTransform[1], geoTransform[5]);
     if (fabs(fabs(pixelSize.x()) - fabs(pixelSize.y())) > 1e-8)
     {
@@ -287,12 +287,14 @@ bool gpsinfoMainDialog::createTiles()
 	ui->progressBar->setValue(0);
 
 	std::vector< float > data(nrXTile*nrYTile);
+    /* cols run from left to right */
 	for ( int col=0 ; col<nrTilesX ; ++col )
 	{
-        QString pathCol = QString(ui->lineEdit_output->text() + "/" + ui->lineEdit_title->text() + "/%1").arg(col);
+        QString pathCol = QString(ui->lineEdit_output->text() + "/" + titleAsDirectory() + "/%1").arg(col);
         QDir().mkpath(pathCol);
-        const double xllCorner = origin.x() + col*nrXTile*pixelSize.x();
+        const double xllCorner = originUpperLeft.x() + col*nrXTile*fabs(pixelSize.x());
 
+        /* rows run from top to bottom */
 		for ( int row=0 ; row<nrTilesY ; ++row )
 		{
 			ui->progressBar->setValue(col*nrTilesY + row);
@@ -300,8 +302,9 @@ bool gpsinfoMainDialog::createTiles()
 
             std::fill(data.begin(), data.end(), noDataValue);
 
-			int sizeX = std::min(nrXTile, nrXTotal - (col+1)*nrXTile);
-			int sizeY = std::min(nrYTile, nrYTotal - (row+1)*nrYTile);
+            /* Clip reading size to available extent of data */
+            int sizeX = std::min(nrXTile, nrXTotal - col*nrXTile);
+            int sizeY = std::min(nrYTile, nrYTotal - row*nrYTile);
 
             /* Stores data "in left to right, top to bottom pixel order". */
 			CPLErr err = rasterBand->RasterIO(GF_Read,
@@ -323,7 +326,8 @@ bool gpsinfoMainDialog::createTiles()
 				return false;
 			}
 
-            const double yllCorner = origin.y() + (row+1)*nrYTile*pixelSize.y();
+            /* Write to ASC file. */
+            const double yllCorner = originUpperLeft.y() - (row+1)*nrYTile*fabs(pixelSize.y());
             const QString filenameASC = QString("%1.asc").arg(row);
             if (!writeASC(nrXTile,
                           nrYTile,
@@ -343,7 +347,6 @@ bool gpsinfoMainDialog::createTiles()
 		}
 	}
 
-
 	/*
 	 * Epilogue
 	 */
@@ -355,6 +358,9 @@ bool gpsinfoMainDialog::createTiles()
 
 //------------------------------------------------------------------------------
 
+/*! \brief Stores the given data in ASC file format, possilby ZIP compressed
+ *
+ */
 bool gpsinfoMainDialog::writeASC(
         const int nrXTile,
         const int nrYTile,
@@ -367,6 +373,10 @@ bool gpsinfoMainDialog::writeASC(
         const QString& filenameASC,
         const bool compression)
 {
+    /*
+     * Write plain text ASC file to memory
+     */
+
     QString asc;
     QTextStream ascStream(&asc);
     ascStream << "NCOLS " << nrXTile << "\n"
@@ -384,6 +394,10 @@ bool gpsinfoMainDialog::writeASC(
         }
         ascStream << "\n";
     }
+
+    /*
+     * Write to (compressed) file.
+     */
 
     if (compression)
     {
@@ -404,7 +418,7 @@ bool gpsinfoMainDialog::writeASC(
     }
     else
     {
-        QSaveFile file(filenameASC);
+        QSaveFile file(pathCol + "/" + filenameASC);
         if (!file.open(QIODevice::WriteOnly))
         {
             return false;
@@ -414,6 +428,17 @@ bool gpsinfoMainDialog::writeASC(
     }
 
     return true;
+}
+
+//------------------------------------------------------------------------------
+
+/*! \brief Converts the given title to a string without any spaces
+ *
+ * \return Title with spaces replaced by underscores.
+ */
+QString gpsinfoMainDialog::titleAsDirectory() const
+{
+    return QString(ui->lineEdit_title->text()).replace(' ', '_');
 }
 
 //------------------------------------------------------------------------------

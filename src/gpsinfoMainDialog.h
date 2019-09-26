@@ -78,6 +78,8 @@ private:
                   const QString&,
                   const bool);
 
+    QString titleAsDirectory() const;
+
 	//--------------------------------------------------------------------------
 
     void reportError(const QString&);
