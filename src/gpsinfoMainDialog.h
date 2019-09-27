@@ -24,6 +24,8 @@
 
 #include <QDialog>
 
+#include "TileMatrixSetInfo.h"
+
 //------------------------------------------------------------------------------
 
 namespace Ui {
@@ -66,7 +68,7 @@ private:
 
     //--------------------------------------------------------------------------
 
-	bool createTiles();
+	bool createTiles(TileMatrixSetInfo&);
     bool writeASC(const int,
                   const int,
                   const double,

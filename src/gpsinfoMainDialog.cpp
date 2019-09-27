@@ -117,7 +117,8 @@ void gpsinfoMainDialog::on_pushButton_create_clicked()
      * Write tiles
      */
 
-    if (!createTiles())
+	TileMatrixSetInfo tmsInfo;
+	if (!createTiles(tmsInfo))
     {
         return;
     }
@@ -127,7 +128,9 @@ void gpsinfoMainDialog::on_pushButton_create_clicked()
      */
 
     QSettings settings;
-    settings.setValue("compress", ui->checkBox_compression->isChecked());
+	settings.setValue("filenameInput", ui->lineEdit_input->text());
+	settings.setValue("directoryOutput", ui->lineEdit_output->text());
+	settings.setValue("compress", ui->checkBox_compression->isChecked());
 
     settings.setValue("title", ui->lineEdit_title->text());
     settings.setValue("description", ui->lineEdit_description->text());
@@ -213,11 +216,17 @@ void gpsinfoMainDialog::on_pushButton_create_clicked()
             xml.writeTextElement("ows:Title", ui->lineEdit_title->text());
             xml.writeTextElement("ows:Abstract", ui->lineEdit_description->text());
             xml.writeTextElement("ows:Identifier", ui->lineEdit_title->text());
+			/* The Style element is mandatory, but useless for us. */
             xml.writeStartElement("Style");
                 xml.writeAttribute("isDefault", "true");
             xml.writeEndElement();
+			/* Let's use text/plain as mime-type for the ESRI ASCII Grid file
+			 * format. For the compressed versions, we are going to use
+			 * application/zip
+			 */
             xml.writeTextElement("Format", ui->checkBox_compression->isChecked() ? "application/zip" : "text/plain");
-            xml.writeStartElement("TileMatrixSetLink");
+			/* This must be a valid link to a TileMatrixSet defined below */
+			xml.writeStartElement("TileMatrixSetLink");
                 xml.writeTextElement("TileMatrixSet", ui->lineEdit_title->text());
             xml.writeEndElement();
             xml.writeStartElement("ResourceURL");
@@ -232,18 +241,30 @@ void gpsinfoMainDialog::on_pushButton_create_clicked()
      */
 
         xml.writeStartElement("TileMatrixSet");
-        xml.writeTextElement("ows:Title", ui->lineEdit_title->text());
-        xml.writeTextElement("ows:Identifier", ui->lineEdit_title->text());
-        xml.writeTextElement("ows:SupportedCRS", QString("urn:ogc:def:crs:EPSG::") + "TODO");
-        xml.writeStartElement("TileMatrixSet");
-            xml.writeTextElement("ows:Identifier", "TODO");
-            xml.writeTextElement("ScaleDenominator", "TODO");
-            xml.writeTextElement("TopLeftCorner", "TODO");
-            xml.writeTextElement("TileWidth", "TODO");
-            xml.writeTextElement("TileHeight", "TODO");
-            xml.writeTextElement("MatrixWidth", "TODO");
-            xml.writeTextElement("MatrixHeight", "TODO");
-        xml.writeEndElement();
+			xml.writeTextElement("ows:Title", ui->lineEdit_title->text());
+			/* This is referenced from above */
+			xml.writeTextElement("ows:Identifier", ui->lineEdit_title->text());
+			xml.writeTextElement("ows:SupportedCRS", QString("urn:ogc:def:crs:EPSG::%1").arg(tmsInfo.m_EPSG));
+			xml.writeStartElement("TileMatrix");
+				xml.writeTextElement("ows:Identifier", "0");
+				/* See https://gis.stackexchange.com/a/315989:
+				 *			CELLSIZE in meters = ScaleDenominator * 0.00028 * (factor CRS units to m)
+				 * So a CELLSIZE of 10 in 31287 corresponds to
+				 * 			ScaleDenominator = 10 / 0.00028 = 35714.285714
+				 */
+				xml.writeTextElement("ScaleDenominator", QString("%1").arg(tmsInfo.m_pixelSize / 0.0028));
+				xml.writeTextElement("TopLeftCorner", QString("%1 %2").arg(tmsInfo.m_originUpperLeft.x()).arg(tmsInfo.m_originUpperLeft.y()));
+				/* Each tile has this many columns, e.g. the asc file's NCOLS */
+				xml.writeTextElement("TileWidth", QString("%1").arg(ui->spinBox_x->value()));
+				/* Each tile has this many rows, e.g. the asc file's NROWS */
+				xml.writeTextElement("TileHeight", QString("%1").arg(ui->spinBox_y->value()));
+				/* We store MatrixHeight x MatrixWidth tiles, e.g. there are
+				 * MatrixWidth subdirectories.
+				 */
+				xml.writeTextElement("MatrixWidth", QString("%1").arg(tmsInfo.m_nrTilesX));
+				/* Each subdirectory stores this many asc files. */
+				xml.writeTextElement("MatrixHeight", QString("%1").arg(tmsInfo.m_nrTilesY));
+			xml.writeEndElement();
         xml.writeEndElement();
 
     xml.writeEndElement();
@@ -268,9 +289,12 @@ void gpsinfoMainDialog::on_pushButton_create_clicked()
 
 /*! \brief Split the input file into tiles
  *
+ * \param info (out) Information about the input file necessary for writing the
+ *		XML file.
+ *
  * \return True on success, false otherwise.
  */
-bool gpsinfoMainDialog::createTiles()
+bool gpsinfoMainDialog::createTiles(TileMatrixSetInfo& info)
 {
 	/*
 	 * Open input file
@@ -300,6 +324,9 @@ bool gpsinfoMainDialog::createTiles()
 		return false;
 	}
 
+	OGRSpatialReference spatialReference(dataset->GetProjectionRef());
+	info.m_EPSG = QString(spatialReference.GetAttrValue("AUTHORITY", 1)).toInt();
+
 	/*
 	 * Process input file
 	 */
@@ -309,7 +336,7 @@ bool gpsinfoMainDialog::createTiles()
 	double geoTransform[6];
 	dataset->GetGeoTransform(geoTransform);
     /* The coordinates of the upper left corner of the upper left pixel (0,0) */
-    const QPointF originUpperLeft(geoTransform[0], geoTransform[3]);
+	info.m_originUpperLeft = QPointF(geoTransform[0], geoTransform[3]);
 	const QPointF pixelSize(geoTransform[1], geoTransform[5]);
     if (fabs(fabs(pixelSize.x()) - fabs(pixelSize.y())) > 1e-8)
     {
@@ -317,6 +344,7 @@ bool gpsinfoMainDialog::createTiles()
         GDALClose(dataset);
         return false;
     }
+	info.m_pixelSize = fabs(pixelSize.x());
 
 	int hasNoDataValue;
     double noDataValue = rasterBand->GetNoDataValue(&hasNoDataValue);
@@ -328,30 +356,30 @@ bool gpsinfoMainDialog::createTiles()
     const int nrXTile = ui->spinBox_x->value();
     const int nrYTile = ui->spinBox_y->value();
 
-	const int nrTilesX = ceil(((float) nrXTotal) / nrXTile);
-	const int nrTilesY = ceil(((float) nrYTotal) / nrYTile);
+	info.m_nrTilesX = ceil(((float) nrXTotal) / nrXTile);
+	info.m_nrTilesY = ceil(((float) nrYTotal) / nrYTile);
 
 	std::clog << "Importing " << nrXTotal << " x " << nrYTotal << " raster points "
-			  << "into " << nrTilesX << " x " << nrTilesY << " tiles, "
+			  << "into " << info.m_nrTilesX << " x " << info.m_nrTilesY << " tiles, "
 			  << "each raster point of " << pixelSize.x() << " x " << pixelSize.y() << " pixel size with a "
 			  << "no data value of '" << noDataValue << "'."
 			  << std::endl;
 
-	ui->progressBar->setRange(0, nrTilesX*nrTilesY-1);
+	ui->progressBar->setRange(0, info.m_nrTilesX*info.m_nrTilesY-1);
 	ui->progressBar->setValue(0);
 
 	std::vector< float > data(nrXTile*nrYTile);
     /* cols run from left to right */
-	for ( int col=0 ; col<nrTilesX ; ++col )
+	for ( int col=0 ; col<info.m_nrTilesX ; ++col )
 	{
         QString pathCol = QString(ui->lineEdit_output->text() + "/" + titleAsDirectory() + "/%1").arg(col);
         QDir().mkpath(pathCol);
-        const double xllCorner = originUpperLeft.x() + col*nrXTile*fabs(pixelSize.x());
+		const double xllCorner = info.m_originUpperLeft.x() + col*nrXTile*fabs(pixelSize.x());
 
         /* rows run from top to bottom */
-		for ( int row=0 ; row<nrTilesY ; ++row )
+		for ( int row=0 ; row<info.m_nrTilesY ; ++row )
 		{
-			ui->progressBar->setValue(col*nrTilesY + row);
+			ui->progressBar->setValue(col*info.m_nrTilesY + row);
 			QApplication::processEvents();
 
             std::fill(data.begin(), data.end(), noDataValue);
@@ -381,7 +409,7 @@ bool gpsinfoMainDialog::createTiles()
 			}
 
             /* Write to ASC file. */
-            const double yllCorner = originUpperLeft.y() - (row+1)*nrYTile*fabs(pixelSize.y());
+			const double yllCorner = info.m_originUpperLeft.y() - (row+1)*nrYTile*fabs(pixelSize.y());
             const QString filenameASC = QString("%1.asc").arg(row);
             if (!writeASC(nrXTile,
                           nrYTile,
