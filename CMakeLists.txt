@@ -28,6 +28,9 @@ cmake_minimum_required(VERSION 3.9.0)
 
 project(gpsinfo_create)
 
+# Rename 'local_config_EXAMPLE.cmake' to 'local_config.cmake'
+include(./local_config.cmake)
+
 #-------------------------------------------------------------------------------
 #
 # Dependancy: qt
@@ -38,7 +41,15 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
+if (WIN32 AND QT5_PATH)
+	set (CMAKE_PREFIX_PATH ${QT5_PATH})
+endif (WIN32 AND QT5_PATH)
+
 find_package(Qt5 COMPONENTS Widgets Core Gui Xml REQUIRED)
+
+if (WIN32 AND QT5_PATH)
+	set (CMAKE_PREFIX_PATH)
+endif (WIN32 AND QT5_PATH)
 
 #-------------------------------------------------------------------------------
 #
@@ -46,11 +57,14 @@ find_package(Qt5 COMPONENTS Widgets Core Gui Xml REQUIRED)
 #
 #-------------------------------------------------------------------------------
 
+if (GDAL_DIR)
+	# findGDAL expects and environment variable
+	set( ENV{GDAL_DIR} ${GDAL_DIR} )
+endif (GDAL_DIR)
 find_package(GDAL REQUIRED)
 
 if (GDAL_FOUND)
 	include_directories( ${GDAL_INCLUDE_DIR} )
-	
 endif (GDAL_FOUND)
 
 #-------------------------------------------------------------------------------
