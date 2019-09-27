@@ -29,6 +29,10 @@
 
 //------------------------------------------------------------------------------
 
+/*
+ * gdal_translate "WMTS:file:///tmp/gpsinfo/gpsinfoWMTSCapabilities.xml" ./gpsinfo_wmts.xml -oF WMTS
+ * CPL_DEBUG=ON  gdal_translate ./gpsinfo_wmts.xml test.tif
+ */
 int main(int argc, char *argv[])
 {
 	QApplication a(argc, argv);
