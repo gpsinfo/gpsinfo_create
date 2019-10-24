@@ -25,6 +25,7 @@
 #include <QSettings>
 #include <QtXml>
 
+#include "ogr_spatialref.h"
 #include "gdal_priv.h"
 
 #include "gpsinfoMainDialog.h"
