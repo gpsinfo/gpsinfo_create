@@ -254,7 +254,7 @@ void gpsinfoMainDialog::on_pushButton_create_clicked()
 				 * 			ScaleDenominator = 10 / 0.00028 = 35714.285714
 				 */
 				xml.writeTextElement("ScaleDenominator", QString("%1").arg(tmsInfo.m_pixelSize / 0.0028, 0, 'e', 10));
-				xml.writeTextElement("TopLeftCorner", QString("%1 %2").arg(tmsInfo.m_originUpperLeft.x()).arg(tmsInfo.m_originUpperLeft.y()));
+				xml.writeTextElement("TopLeftCorner", QString("%1 %2").arg(tmsInfo.m_originUpperLeft.x(), 0, 'e', 10).arg(tmsInfo.m_originUpperLeft.y(), 0, 'e', 10));
 				/* Each tile has this many columns, e.g. the asc file's NCOLS */
 				xml.writeTextElement("TileWidth", QString("%1").arg(ui->spinBox_x->value()));
 				/* Each tile has this many rows, e.g. the asc file's NROWS */
@@ -462,6 +462,8 @@ bool gpsinfoMainDialog::writeASC(
 
     QString asc;
     QTextStream ascStream(&asc);
+	ascStream.setRealNumberNotation(QTextStream::ScientificNotation);
+	ascStream.setRealNumberPrecision(10);
     ascStream << "NCOLS " << nrXTile << "\n"
               << "NROWS " << nrYTile << "\n"
               << "XLLCORNER " << xllCorner << "\n"
