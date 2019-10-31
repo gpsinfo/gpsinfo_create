@@ -15,7 +15,9 @@ Visual Studio 2017 prebuild binaries. Hence, we recomment to build
 gpsinfo_create in 64-bit with Visual Studio 2017.
 
 We use the cmake build system (https://cmake.org/), that allows to generate a 
-Visual Studio solution from the accompanied CMakeLists.txt
+Visual Studio solution from the accompanied CMakeLists.txt. Copy 
+local_config_EXAMPLE.config in the source tree's root to local_config.config
+and edit the latter to provide the paths to both Qt and gdal.
 
 ### Deployment
 
@@ -33,4 +35,5 @@ These are instructions for a simple manual deployment on windows
 ## Compilation on Linux (Ubuntu et al.)
 
 Compilation on Linux is straight forward. Install the development packages
-of QT 5 and gdal, generate Makefiles with cmake and run them.
+of QT 5 and gdal, generate Makefiles with cmake (create local_config.cmake as 
+described in above section windows compilation) and run them.
