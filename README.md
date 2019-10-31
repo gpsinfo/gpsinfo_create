@@ -1,6 +1,6 @@
 # gpsinfo_create
 
-A user friendly tile creator for WMTS/gpsinfo based services. See 
+A user friendly, GPL3 licensed tile creator for WMTS/gpsinfo based services. See 
 http://www.gpsinfo.org for more information.
 
 ## Compilation on Windows (Visual Studio 2017)
