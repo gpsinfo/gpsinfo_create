@@ -16,7 +16,7 @@ gpsinfo_create in 64-bit with Visual Studio 2017.
 
 We use the cmake build system (https://cmake.org/), that allows to generate a 
 Visual Studio solution from the accompanied CMakeLists.txt. Copy 
-local_config_EXAMPLE.config in the source tree's root to local_config.config
+local_config_EXAMPLE.config in the source tree's root to local_config.cmake
 and edit the latter to provide the paths to both Qt and gdal.
 
 ### Deployment
