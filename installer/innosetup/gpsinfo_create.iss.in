@@ -45,6 +45,9 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 ; Couldn't get the following to work with constant {userdesktop}
 Source: "${GPSINFO_CREATE_INSTALLER_OUTPUT}\vc_redist.x64.exe" ; DestDir: "{tmp}"; Flags: ignoreversion deleteafterinstall
 Source: "${GPSINFO_CREATE_INSTALL_PATH}\release-x64\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+; This is only necessary as we don't include the icon as a Qt resource. See
+; also second [Icons] entry below. 
+Source: "${CMAKE_SOURCE_DIR}\installer\innosetup\images\gpsinfo_create_innosetup_icon.ico"; DestDir: "{app}"; Flags: ignoreversion
 
 ; With Inno Setup, common sense is that uninstalling prior to installing
 ; is not necessary, see for example
@@ -73,7 +76,7 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 ; This creates an entry in the start menu folder, references Setup::DefaultGroupName
 Name: "{group}\gpsinfo_create"; Filename: "{app}\gpsinfo_create.exe"; WorkingDir: "{app}"
 ; This creates an entry on the desktop, references the Tasks section
-Name: "{commondesktop}\gpsinfo_create"; Filename: "{app}\gpsinfo_create.exe"; WorkingDir: "{app}"; Tasks: desktopicon
+Name: "{commondesktop}\gpsinfo_create"; Filename: "{app}\gpsinfo_create.exe"; WorkingDir: "{app}"; IconFilename: "{app}\gpsinfo_create_innosetup_icon.ico"; Tasks: desktopicon
 
 [Run]
 Filename: "{app}\gpsinfo_create.exe"; Description: "{cm:LaunchProgram,gpsinfo_create}"; Flags: nowait postinstall skipifsilent

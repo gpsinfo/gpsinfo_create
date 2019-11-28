@@ -100,6 +100,12 @@ add_executable(gpsinfo_create
 	${GPSINFO_CREATE_UI}
 )
 
+# This disables the console on Windows
+if (WIN32)
+	set_property(TARGET gpsinfo_create PROPERTY WIN32_EXECUTABLE true)
+	message(STATUS "Disabling console window ...")
+endif (WIN32)
+
 target_link_libraries(gpsinfo_create 
 	Qt5::Widgets Qt5::Core Qt5::Gui Qt5::Xml 
 	${GDAL_LIBRARY} 
