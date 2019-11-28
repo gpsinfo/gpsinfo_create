@@ -28,6 +28,8 @@ cmake_minimum_required(VERSION 3.9.0)
 
 project(gpsinfo_create)
 
+set(GPSINFO_CREATE_VERSION "1.0.0")
+
 # Rename 'local_config_EXAMPLE.cmake' to 'local_config.cmake'
 include(./local_config.cmake)
 
@@ -102,3 +104,31 @@ target_link_libraries(gpsinfo_create
 	Qt5::Widgets Qt5::Core Qt5::Gui Qt5::Xml 
 	${GDAL_LIBRARY} 
 )
+
+#-------------------------------------------------------------------------------
+#
+# "Installation"
+#
+#-------------------------------------------------------------------------------
+
+SET(GPSINFO_CREATE_INNOSETUP installer/innosetup/gpsinfo_create.iss)
+configure_file("${GPSINFO_CREATE_INNOSETUP}.in" "${CMAKE_SOURCE_DIR}/${GPSINFO_CREATE_INNOSETUP}")
+
+if (WIN32 AND GPSINFO_CREATE_INSTALL_PATH)
+	
+	set(GPSINFO_CREATE_INSTALL_PATH_RELEASE "${GPSINFO_CREATE_INSTALL_PATH}/release-x64")
+	set(GPSINFO_CREATE_INSTALL_PATH_DEBUG "${GPSINFO_CREATE_INSTALL_PATH}/debug-x64")
+
+    install(TARGETS gpsinfo_create
+		CONFIGURATIONS Release
+		RUNTIME DESTINATION "${GPSINFO_CREATE_INSTALL_PATH_RELEASE}"
+		LIBRARY DESTINATION "${GPSINFO_CREATE_INSTALL_PATH_RELEASE}"
+		ARCHIVE DESTINATION "${GPSINFO_CREATE_INSTALL_PATH_RELEASE}"
+	)	
+    install(TARGETS gpsinfo_create
+		CONFIGURATIONS Debug
+		RUNTIME DESTINATION "${GPSINFO_CREATE_INSTALL_PATH_DEBUG}"
+		LIBRARY DESTINATION "${GPSINFO_CREATE_INSTALL_PATH_DEBUG}"
+		ARCHIVE DESTINATION "${GPSINFO_CREATE_INSTALL_PATH_DEBUG}"
+	)
+endif ()

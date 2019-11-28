@@ -1,0 +1,79 @@
+; For help, google key and innosetup, e.g. "innosetup WizardImageFile"
+;
+; A list of constants is found here: http://www.jrsoftware.org/ishelp/topic_consts.htm
+;
+; Edit the file with the .in postfix. That file parsed by cmake to generate
+; the file w/o the .in postfix. Tokens of the form ${VARNAME} are replaced by
+; the value of the respective cmake variable VARNAME.
+
+[Setup]
+AppVersion=${GPSINFO_CREATE_VERSION}
+OutputBaseFilename=gpsinfo_create-${GPSINFO_CREATE_VERSION}-setup-x64
+AppId={{f76a2d0b-7e0f-4888-a88f-d7ee2dea1ab0}
+AppName=gpsinfo_create
+AppPublisher=Rechenraum GmbH
+AppPublisherURL=http://www.gpsinfo.org/
+AppSupportURL=http://www.gpsinfo.org/
+AppUpdatesURL=http://www.gpsinfo.org/
+DefaultGroupName=gpsinfo
+OutputDir=${GPSINFO_CREATE_INSTALLER_OUTPUT}
+DefaultDirName="{pf64}\gpsinfo_create"
+Compression=lzma
+SolidCompression=yes
+; We need to create a directory in C:\Program Files\ ...
+PrivilegesRequired=admin
+DisableWelcomePage=no
+; If the "Select Destination Location" wizard page is not shown, the
+; application is already installed.
+; See https://stackoverflow.com/a/32065225 for the BMP requirements.
+WizardImageFile=${CMAKE_SOURCE_DIR}\installer\innosetup\images\gpsinfo_create_innosetup.bmp
+WizardSmallImageFile=${CMAKE_SOURCE_DIR}\installer\innosetup\images\gpsinfo_create_innosetup_upper_right.bmp
+WizardImageStretch=no
+SetupIconFile=${CMAKE_SOURCE_DIR}\installer\innosetup\images\gpsinfo_create_innosetup_icon.ico
+
+[Messages]
+
+; See C:\Program Files (x86)\Inno Setup 5\Default.isl for the message keys
+; we may override in here.
+;WelcomeLabel1=Welcome to [name] Setup
+;WelcomeLabel2=This will install [name/ver] on your computer.
+
+[Languages]
+Name: "english"; MessagesFile: "compiler:Default.isl"
+
+[Files]
+; Couldn't get the following to work with constant {userdesktop}
+Source: "${GPSINFO_CREATE_INSTALLER_OUTPUT}\vc_redist.x64.exe" ; DestDir: "{tmp}"; Flags: ignoreversion deleteafterinstall
+Source: "${GPSINFO_CREATE_INSTALL_PATH}\release-x64\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+
+; With Inno Setup, common sense is that uninstalling prior to installing
+; is not necessary, see for example
+;     https://stackoverflow.com/a/23318280
+; If we ever want to uninstall, read the comments and answers in the 
+; following link. There are several ways.
+;     http://stackoverflow.com/questions/2000296/innosetup-how-to-automatically-uninstall-previous-installed-version
+[InstallDelete]
+; It is not feasible to wipe the entire installation directory with the 
+; following command. User (e.g. Friedrich) might store user data in the app dir.
+; Type: filesandordirs; Name: "{app}"
+
+
+; This is from 
+;   https://stackoverflow.com/a/25804522
+; for the command line parameters see
+;   http://asawicki.info/news_1597_installing_visual_c_redistributable_package_from_command_line.html
+[Run]
+Filename: {tmp}\vc_redist.x64.exe; Parameters: "/install /passive /norestart"; StatusMsg: "Installing VC++ 2015 Redistributables ..."
+
+[Tasks]
+; Creates a desktop icon
+Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
+
+[Icons]
+; This creates an entry in the start menu folder, references Setup::DefaultGroupName
+Name: "{group}\gpsinfo_create"; Filename: "{app}\gpsinfo_create.exe"; WorkingDir: "{app}"
+; This creates an entry on the desktop, references the Tasks section
+Name: "{commondesktop}\gpsinfo_create"; Filename: "{app}\gpsinfo_create.exe"; WorkingDir: "{app}"; Tasks: desktopicon
+
+[Run]
+Filename: "{app}\gpsinfo_create.exe"; Description: "{cm:LaunchProgram,gpsinfo_create}"; Flags: nowait postinstall skipifsilent
