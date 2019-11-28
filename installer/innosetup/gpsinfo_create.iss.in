@@ -8,7 +8,7 @@
 
 [Setup]
 AppVersion=${GPSINFO_CREATE_VERSION}
-OutputBaseFilename=gpsinfo_create-${GPSINFO_CREATE_VERSION}-setup-x64
+OutputBaseFilename=gpsinfo_create-${GPSINFO_CREATE_VERSION}-setup-x64-UNSIGNED
 AppId={{f76a2d0b-7e0f-4888-a88f-d7ee2dea1ab0}
 AppName=gpsinfo_create
 AppPublisher=Rechenraum GmbH
