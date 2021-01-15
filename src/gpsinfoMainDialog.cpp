@@ -33,6 +33,12 @@
 
 //------------------------------------------------------------------------------
 
+/*! \brief Constructor
+ *
+ * We realize the UI as QDialog.
+ *
+ * \param parent Parent widget
+ */
 gpsinfoMainDialog::gpsinfoMainDialog(QWidget *parent) :
 	QDialog(parent),
 	ui(new Ui::gpsinfoMainDialog)
@@ -42,7 +48,7 @@ gpsinfoMainDialog::gpsinfoMainDialog(QWidget *parent) :
     QSettings settings;
     ui->lineEdit_input->setText(settings.value("filenameInput", "").toString());
     ui->lineEdit_output->setText(settings.value("directoryOutput", "").toString());
-    ui->checkBox_compression->setChecked(settings.value("compress", false).toBool());
+    ui->combo_tileFormat->setCurrentIndex(settings.value("tileFormatIndex", 0).toInt());
 
     ui->lineEdit_title->setText(settings.value("title", "").toString());
     ui->lineEdit_description->setText(settings.value("description", "").toString());
@@ -60,6 +66,8 @@ gpsinfoMainDialog::gpsinfoMainDialog(QWidget *parent) :
 
 //------------------------------------------------------------------------------
 
+/*! \brief Destructor
+ */
 gpsinfoMainDialog::~gpsinfoMainDialog()
 {
 	delete ui;
@@ -131,7 +139,7 @@ void gpsinfoMainDialog::on_pushButton_create_clicked()
     QSettings settings;
 	settings.setValue("filenameInput", ui->lineEdit_input->text());
 	settings.setValue("directoryOutput", ui->lineEdit_output->text());
-	settings.setValue("compress", ui->checkBox_compression->isChecked());
+    settings.setValue("tileFormatIndex", ui->combo_tileFormat->currentIndex());
 
     settings.setValue("title", ui->lineEdit_title->text());
     settings.setValue("description", ui->lineEdit_description->text());
@@ -225,15 +233,36 @@ void gpsinfoMainDialog::on_pushButton_create_clicked()
 			 * format. For the compressed versions, we are going to use
 			 * application/zip
 			 */
-            xml.writeTextElement("Format", ui->checkBox_compression->isChecked() ? "application/zip" : "text/plain");
+            QString format, filenameEnding;
+            switch (ui->combo_tileFormat->currentIndex())
+            {
+            case 0:
+                /* https://github.com/opengeospatial/geotiff/issues/34 (Jun 19, 2019) */
+                format = "image/tiff; application=geotiff";
+                filenameEnding = ".tif";
+                break;
+            case 1:
+                format = "text/plain";
+                filenameEnding = ".asc";
+                break;
+            case 2:
+                format = "application/zip";
+                filenameEnding = ".asc.zip";
+                break;
+            default:
+                reportError("Unknown or unsupported file format.");
+                return;
+            }
+
+            xml.writeTextElement("Format", format);
 			/* This must be a valid link to a TileMatrixSet defined below */
 			xml.writeStartElement("TileMatrixSetLink");
                 xml.writeTextElement("TileMatrixSet", ui->lineEdit_title->text());
             xml.writeEndElement();
             xml.writeStartElement("ResourceURL");
-                xml.writeAttribute("format", ui->checkBox_compression->isChecked() ? "application/zip" : "text/plain");
+                xml.writeAttribute("format", format);
                 xml.writeAttribute("resourceType", "tile");
-                xml.writeAttribute("template", ui->lineEdit_URL->text() + "/" + titleAsDirectory() + "/{TileCol}/{TileRow}" + (ui->checkBox_compression->isChecked() ? ".asc.zip" : ".asc"));
+                xml.writeAttribute("template", ui->lineEdit_URL->text() + "/" + titleAsDirectory() + "/{TileCol}/{TileRow}" + filenameEnding);
             xml.writeEndElement();
         xml.writeEndElement();
 
@@ -411,21 +440,34 @@ bool gpsinfoMainDialog::createTiles(TileMatrixSetInfo& info)
 
             /* Write to ASC file. */
 			const double yllCorner = info.m_originUpperLeft.y() - (row+1)*nrYTile*fabs(pixelSize.y());
-            const QString filenameASC = QString("%1.asc").arg(row);
-            if (!writeASC(nrXTile,
-                          nrYTile,
-                          xllCorner,
-                          yllCorner,
-                          fabs(pixelSize.x()),
-                          noDataValue,
-                          data,
-                          pathCol,
-                          filenameASC,
-                          ui->checkBox_compression->isChecked()))
+            if (ui->combo_tileFormat->currentIndex() == 0)
             {
-                reportError("We failed to write tile '" + filenameASC + "'.");
-                GDALClose(dataset);
+                reportError("GeoTIFF export not yet implemented.");
                 return false;
+            }
+            else if ((ui->combo_tileFormat->currentIndex() == 1) ||
+                     (ui->combo_tileFormat->currentIndex() == 2))
+            {
+                const QString filenameASC = QString("%1.asc").arg(row);
+                if (!writeASC(nrXTile,
+                              nrYTile,
+                              xllCorner,
+                              yllCorner,
+                              fabs(pixelSize.x()),
+                              noDataValue,
+                              data,
+                              pathCol,
+                              filenameASC,
+                              ui->combo_tileFormat->currentIndex() == 2))
+                {
+                    reportError("We failed to write tile '" + filenameASC + "'.");
+                    GDALClose(dataset);
+                    return false;
+                }
+            }
+            else
+            {
+                reportError("Unknown or unsupported file format.");
             }
 		}
 	}
@@ -441,7 +483,7 @@ bool gpsinfoMainDialog::createTiles(TileMatrixSetInfo& info)
 
 //------------------------------------------------------------------------------
 
-/*! \brief Stores the given data in ASC file format, possilby ZIP compressed
+/*! \brief Stores the given data in ASC file format, possibly ZIP compressed
  *
  */
 bool gpsinfoMainDialog::writeASC(
