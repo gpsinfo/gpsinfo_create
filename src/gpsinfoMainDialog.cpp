@@ -363,8 +363,8 @@ bool gpsinfoMainDialog::createTiles(TileMatrixSetInfo& info)
 
 	const int nrXTotal = dataset->GetRasterXSize();
 	const int nrYTotal = dataset->GetRasterYSize();
-	double geoTransform[6];
-	dataset->GetGeoTransform(geoTransform);
+    std::vector< double > geoTransform(6);
+    dataset->GetGeoTransform(geoTransform.data());
     /* The coordinates of the upper left corner of the upper left pixel (0,0) */
 	info.m_originUpperLeft = QPointF(geoTransform[0], geoTransform[3]);
 	const QPointF pixelSize(geoTransform[1], geoTransform[5]);
@@ -398,13 +398,14 @@ bool gpsinfoMainDialog::createTiles(TileMatrixSetInfo& info)
 	ui->progressBar->setRange(0, info.m_nrTilesX*info.m_nrTilesY-1);
 	ui->progressBar->setValue(0);
 
+    std::vector< double > geoTransformC = geoTransform;
 	std::vector< float > data(nrXTile*nrYTile);
     /* cols run from left to right */
 	for ( int col=0 ; col<info.m_nrTilesX ; ++col )
 	{
         QString pathCol = QString(ui->lineEdit_output->text() + "/" + titleAsDirectory() + "/%1").arg(col);
         QDir().mkpath(pathCol);
-		const double xllCorner = info.m_originUpperLeft.x() + col*nrXTile*fabs(pixelSize.x());
+        const double xLeft = info.m_originUpperLeft.x() + col*nrXTile*fabs(pixelSize.x());
 
         /* rows run from top to bottom */
 		for ( int row=0 ; row<info.m_nrTilesY ; ++row )
@@ -439,35 +440,72 @@ bool gpsinfoMainDialog::createTiles(TileMatrixSetInfo& info)
 			}
 
             /* Write to ASC file. */
-			const double yllCorner = info.m_originUpperLeft.y() - (row+1)*nrYTile*fabs(pixelSize.y());
             if (ui->combo_tileFormat->currentIndex() == 0)
             {
-                reportError("GeoTIFF export not yet implemented.");
-                return false;
+
+                /* See
+                 *      https://gdal.org/drivers/raster/gtiff.html
+                 * and
+                 *      https://gerasimosmichalitsianos.wordpress.com/2018/01/08/178/
+                 */
+                const QString filename = QString("%1/%2.tif").arg(pathCol).arg(row);
+                GDALDataset* datasetOut = GetGDALDriverManager()->GetDriverByName("GTiff")->Create(
+                            filename.toStdString().c_str(),
+                            nrXTile,
+                            nrYTile,
+                            1,
+                            GDT_Float32,
+                            NULL);
+                /* The coordinates of the upper left corner of the upper left pixel (0,0) */
+                geoTransformC[0] = xLeft;
+                geoTransformC[3] = info.m_originUpperLeft.y() - row*nrYTile*fabs(pixelSize.y());
+                datasetOut->SetGeoTransform(geoTransformC.data());
+                datasetOut->SetProjection(dataset->GetProjectionRef());
+                datasetOut->GetRasterBand(1)->SetNoDataValue(noDataValue);
+                if (datasetOut->GetRasterBand(1)->RasterIO(GF_Write,
+                                                        0,
+                                                        0,
+                                                        nrXTile,
+                                                        nrYTile,
+                                                        data.data(),
+                                                        nrXTile,
+                                                        nrYTile,
+                                                        GDT_Float32,
+                                                        0,
+                                                        0) != CE_None)
+                {
+                    reportError("We failed to write tile '" + filename + "'.");
+                    GDALClose(datasetOut);
+                    GDALClose(dataset);
+                    return false;
+                }
+                GDALClose(datasetOut);
             }
             else if ((ui->combo_tileFormat->currentIndex() == 1) ||
                      (ui->combo_tileFormat->currentIndex() == 2))
             {
-                const QString filenameASC = QString("%1.asc").arg(row);
+                const QString filename = QString("%1.asc").arg(row);
                 if (!writeASC(nrXTile,
                               nrYTile,
-                              xllCorner,
-                              yllCorner,
+                              xLeft,
+                              info.m_originUpperLeft.y() - (row+1)*nrYTile*fabs(pixelSize.y()),
                               fabs(pixelSize.x()),
                               noDataValue,
                               data,
                               pathCol,
-                              filenameASC,
+                              filename,
                               ui->combo_tileFormat->currentIndex() == 2))
                 {
-                    reportError("We failed to write tile '" + filenameASC + "'.");
+                    reportError("We failed to write tile '" + filename + "'.");
                     GDALClose(dataset);
                     return false;
                 }
             }
             else
             {
-                reportError("Unknown or unsupported file format.");
+                reportError("Unknown or unsupported tile format.");
+                GDALClose(dataset);
+                return false;
             }
 		}
 	}
@@ -477,6 +515,7 @@ bool gpsinfoMainDialog::createTiles(TileMatrixSetInfo& info)
 	 */
 
 	GDALClose(dataset);
+    GDALDestroyDriverManager();
 
 	return true;
 }
@@ -485,6 +524,19 @@ bool gpsinfoMainDialog::createTiles(TileMatrixSetInfo& info)
 
 /*! \brief Stores the given data in ASC file format, possibly ZIP compressed
  *
+ * \param nrXTile Horizontal raster size, e.g. the number of columns
+ * \param nrYTile Vertical raster size, e.g. the number of rows
+ * \param xllCorner Horizontal coordinate of the tile's lower left corner
+ * \param yllCorner Vertical coordinate of the tile's lower left corner
+ * \param cellSize Size of a (square) raster pixel
+ * \param noDataValue No data value
+ * \param data The raster tile's data, in left to right, top to bottom pixel
+ *      order
+ * \param pathCol Path to write file to
+ * \param filename Name of file to export to
+ * \param compression If true, the ASC file is ZIP compressed.
+ *
+ * \return True on success, false otherwise.
  */
 bool gpsinfoMainDialog::writeASC(
         const int nrXTile,
@@ -504,8 +556,8 @@ bool gpsinfoMainDialog::writeASC(
 
     QString asc;
     QTextStream ascStream(&asc);
-	ascStream.setRealNumberNotation(QTextStream::ScientificNotation);
-	ascStream.setRealNumberPrecision(10);
+    ascStream.setRealNumberNotation(QTextStream::ScientificNotation);
+    ascStream.setRealNumberPrecision(10);
     ascStream << "NCOLS " << nrXTile << "\n"
               << "NROWS " << nrYTile << "\n"
               << "XLLCORNER " << xllCorner << "\n"

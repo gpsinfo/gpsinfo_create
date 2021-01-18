@@ -30,6 +30,8 @@
 //------------------------------------------------------------------------------
 
 /*
+ * DTM 10m Austria: https://www.data.gv.at/katalog/dataset/dgm
+ *
  * gdal_translate "WMTS:file:///tmp/gpsinfo/gpsinfoWMTSCapabilities.xml" ./gpsinfo_wmts.xml -oF WMTS
  * CPL_DEBUG=ON  gdal_translate ./gpsinfo_wmts.xml test.tif
  */

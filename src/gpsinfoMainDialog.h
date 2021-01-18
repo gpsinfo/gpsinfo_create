@@ -68,7 +68,7 @@ private:
 
     //--------------------------------------------------------------------------
 
-	bool createTiles(TileMatrixSetInfo&);
+    bool createTiles(TileMatrixSetInfo&);
     bool writeASC(const int,
                   const int,
                   const double,
