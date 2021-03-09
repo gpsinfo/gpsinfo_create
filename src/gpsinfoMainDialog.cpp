@@ -49,6 +49,7 @@ gpsinfoMainDialog::gpsinfoMainDialog(QWidget *parent) :
     ui->lineEdit_input->setText(settings.value("filenameInput", "").toString());
     ui->lineEdit_output->setText(settings.value("directoryOutput", "").toString());
     ui->combo_tileFormat->setCurrentIndex(settings.value("tileFormatIndex", 0).toInt());
+    ui->checkbox_createOverviews->setChecked(settings.value("createOverviews", false).toBool());
 
     ui->lineEdit_title->setText(settings.value("title", "").toString());
     ui->lineEdit_description->setText(settings.value("description", "").toString());
@@ -140,6 +141,7 @@ void gpsinfoMainDialog::on_pushButton_create_clicked()
 	settings.setValue("filenameInput", ui->lineEdit_input->text());
 	settings.setValue("directoryOutput", ui->lineEdit_output->text());
     settings.setValue("tileFormatIndex", ui->combo_tileFormat->currentIndex());
+    settings.setValue("createOverviews", ui->checkbox_createOverviews->isChecked());
 
     settings.setValue("title", ui->lineEdit_title->text());
     settings.setValue("description", ui->lineEdit_description->text());
@@ -401,6 +403,48 @@ bool gpsinfoMainDialog::createTiles(TileMatrixSetInfo& info)
 	ui->progressBar->setRange(0, info.m_nrTilesX*info.m_nrTilesY-1);
 	ui->progressBar->setValue(0);
 
+    /* At the coarsest zoom level, the data shall fit into a single tile. Hence
+     * we solve for
+     *      nrXTotal / 2^k <  nrXTile
+     */
+    int maxZoomLevel = ceil(log2(nrXTotal / nrXTile));
+    std::clog << "maxZoomLevel = " << maxZoomLevel << std::endl;
+    std::vector< int > decimationFactors(maxZoomLevel-1);
+    for ( int i=0 ; i<static_cast< int >(decimationFactors.size()) ; ++i )
+    {
+        decimationFactors[i] = 1<<(i+1);
+    }
+    dataset->BuildOverviews("NEAREST",
+                            decimationFactors.size(),
+                            decimationFactors.data(),
+                            0,
+                            nullptr,
+                            nullptr,
+                            nullptr);
+    std::clog << "# overviews = " << rasterBand->GetOverviewCount() << std::endl;
+    GDALRasterBand* overviewBand0 = rasterBand->GetOverview(0);
+    std::clog << overviewBand0->GetXSize() << " x " << overviewBand0->GetYSize() << ", "
+              << overviewBand0->GetOffset() << std::endl;
+
+    /* TODO:
+     *  - find out how a pixel of overviewBand? relates to the original band
+     *  - export each overview band just as the original band to the appropriate
+     *      zoom level directory.
+     */
+
+//    GDALDataset* datasetOut = GetGDALDriverManager()->GetDriverByName("GTiff")->CreateCopy(
+//                "/tmp/all.tif",
+//                dataset,
+//                TRUE,
+//                nullptr,
+//                nullptr,
+//                nullptr);
+//    GDALClose(datasetOut);
+
+
+    std::clog << "DONE." << std::endl;
+
+#if 0
     std::vector< double > geoTransformC = geoTransform;
 	std::vector< float > data(nrXTile*nrYTile);
     /* cols run from left to right */
@@ -450,15 +494,20 @@ bool gpsinfoMainDialog::createTiles(TileMatrixSetInfo& info)
                  *      https://gdal.org/drivers/raster/gtiff.html
                  * and
                  *      https://gerasimosmichalitsianos.wordpress.com/2018/01/08/178/
+                 * Regarding compression,
+                 *      https://trac.osgeo.org/gdal/wiki/CloudOptimizedGeoTIFF
+                 * recommends LZW for greatest compatibility
                  */
                 const QString filename = QString("%1/%2.tif").arg(pathCol).arg(row);
+                char **papszOptions = nullptr;
+                papszOptions = CSLSetNameValue(papszOptions, "COMPRESS", "LZW");
                 GDALDataset* datasetOut = GetGDALDriverManager()->GetDriverByName("GTiff")->Create(
                             filename.toStdString().c_str(),
                             nrXTile,
                             nrYTile,
                             1,
                             GDT_Float32,
-                            NULL);
+                            papszOptions);
                 /* The coordinates of the upper left corner of the upper left pixel (0,0) */
                 geoTransformC[0] = xLeft;
                 geoTransformC[3] = info.m_originUpperLeft.y() - row*nrYTile*fabs(pixelSize.y());
@@ -512,8 +561,8 @@ bool gpsinfoMainDialog::createTiles(TileMatrixSetInfo& info)
             }
 		}
 	}
-
-	/*
+#endif
+    /*
 	 * Epilogue
 	 */
 
