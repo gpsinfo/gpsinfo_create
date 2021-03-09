@@ -274,7 +274,9 @@ void gpsinfoMainDialog::on_pushButton_create_clicked()
 			xml.writeTextElement("ows:Title", ui->lineEdit_title->text());
 			/* This is referenced from above */
 			xml.writeTextElement("ows:Identifier", ui->lineEdit_title->text());
-			xml.writeTextElement("ows:SupportedCRS", QString("urn:ogc:def:crs:EPSG::%1").arg(tmsInfo.m_EPSG));
+            std::cerr << "Writing hard-coded EPSG" << std::endl;
+//			xml.writeTextElement("ows:SupportedCRS", QString("urn:ogc:def:crs:EPSG::%1").arg(tmsInfo.m_EPSG));
+            xml.writeTextElement("ows:SupportedCRS", "urn:ogc:def:crs:EPSG::31287");
 			xml.writeStartElement("TileMatrix");
 				xml.writeTextElement("ows:Identifier", "0");
 				/* See https://gis.stackexchange.com/a/315989:
@@ -366,8 +368,8 @@ bool gpsinfoMainDialog::createTiles(TileMatrixSetInfo& info)
     std::vector< double > geoTransform(6);
     dataset->GetGeoTransform(geoTransform.data());
     /* The coordinates of the upper left corner of the upper left pixel (0,0) */
-	info.m_originUpperLeft = QPointF(geoTransform[0], geoTransform[3]);
-	const QPointF pixelSize(geoTransform[1], geoTransform[5]);
+    info.m_originUpperLeft = QPointF(geoTransform[0], geoTransform[3]);
+    const QPointF pixelSize(geoTransform[1], geoTransform[5]);
     if (fabs(fabs(pixelSize.x()) - fabs(pixelSize.y())) > 1e-8)
     {
         reportError("We support raster data sets with square pixels only.");
@@ -392,7 +394,8 @@ bool gpsinfoMainDialog::createTiles(TileMatrixSetInfo& info)
 	std::clog << "Importing " << nrXTotal << " x " << nrYTotal << " raster points "
 			  << "into " << info.m_nrTilesX << " x " << info.m_nrTilesY << " tiles, "
 			  << "each raster point of " << pixelSize.x() << " x " << pixelSize.y() << " pixel size with a "
-			  << "no data value of '" << noDataValue << "'."
+              << "no data value of '" << noDataValue << "'. "
+              << "Origin is at (" << info.m_originUpperLeft.x() << ", " << info.m_originUpperLeft.y() << ")." << std::endl
 			  << std::endl;
 
 	ui->progressBar->setRange(0, info.m_nrTilesX*info.m_nrTilesY-1);
@@ -516,6 +519,12 @@ bool gpsinfoMainDialog::createTiles(TileMatrixSetInfo& info)
 
 	GDALClose(dataset);
     GDALDestroyDriverManager();
+
+    /* This is necessary for Austria's OGD 10m. */
+    if (spatialReference.GetAxisMappingStrategy() == OAMS_AUTHORITY_COMPLIANT)
+    {
+        info.m_originUpperLeft = QPointF(info.m_originUpperLeft.y(), info.m_originUpperLeft.x());
+    }
 
 	return true;
 }
