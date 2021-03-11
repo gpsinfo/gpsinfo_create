@@ -391,19 +391,25 @@ bool gpsinfoMainDialog::writeTiles(TileMatrixSetInfo& info)
      */
     const int maxZoomLevelX = ceil(log2(nrXTotal / nrXTile));
     const int maxZoomLevelY = ceil(log2(nrYTotal / nrYTile));
-    const int maxZoomLevel = std::max(maxZoomLevelX, maxZoomLevelY);
+    const int maxZoomLevel = std::max(maxZoomLevelX, maxZoomLevelY)+1;
     std::vector< int > decimationFactors(maxZoomLevel-1);
     for ( int i=0 ; i<static_cast< int >(decimationFactors.size()) ; ++i )
     {
         decimationFactors[i] = 1<<(i+1);
     }
-    dataset->BuildOverviews("NEAREST",
-                            decimationFactors.size(),
-                            decimationFactors.data(),
-                            0,
-                            nullptr,
-                            nullptr,
-                            nullptr);
+    if (dataset->BuildOverviews("NEAREST",
+                                decimationFactors.size(),
+                                decimationFactors.data(),
+                                0,
+                                nullptr,
+                                nullptr,
+                                nullptr) != CE_None)
+    {
+        std::cerr << "GDAL failed on building the overviews with '" << CPLGetLastErrorMsg() << "'." << std::endl;
+        GDALClose(dataset);
+        GDALDestroyDriverManager();
+        return false;
+    }
 
     std::clog << "DONE" << std::endl;
 
@@ -411,14 +417,9 @@ bool gpsinfoMainDialog::writeTiles(TileMatrixSetInfo& info)
     for (int i=0 ; i<maxZoomLevel-1 ; ++i )
     {
         /* Overviews are sorted in decreasing size */
-        writeTiles(dataset, rasterBand->GetOverview(maxZoomLevel-i-1), i, maxZoomLevel, info.m_tileMatrixInfos[i]);
-        if (i == 2)
-        {
-            break;
-        }
+        writeTiles(dataset, rasterBand->GetOverview(maxZoomLevel-i-2), i, maxZoomLevel, info.m_tileMatrixInfos[i]);
     }
-//    writeTiles(dataset, rasterBand, maxZoomLevel, maxZoomLevel, info.m_tileMatrixInfos.back());
-
+    writeTiles(dataset, rasterBand, maxZoomLevel, maxZoomLevel, info.m_tileMatrixInfos.back());
 
     /*
 	 * Epilogue
