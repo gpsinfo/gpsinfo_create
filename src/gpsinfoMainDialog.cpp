@@ -503,7 +503,7 @@ bool gpsinfoMainDialog::writeTiles(GDALDataset* dataset,
               << "\tno data value = '" << noDataValue << "'. " << std::endl
               << std::endl;
 
-    ui->progressBar->setFormat(QString("Writing zoom level %1 ... %p%").arg(xmlZoomLevel));
+    ui->progressBar->setFormat(QString("Writing zoom level %1 of %2 ... %p%").arg(xmlZoomLevel).arg(maxZoomLevel));
     ui->progressBar->setRange(0, info.m_nrTilesX*info.m_nrTilesY-1);
     ui->progressBar->setValue(0);
 
