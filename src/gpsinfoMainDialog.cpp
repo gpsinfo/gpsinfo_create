@@ -128,7 +128,7 @@ void gpsinfoMainDialog::on_pushButton_create_clicked()
      */
 
 	TileMatrixSetInfo tmsInfo;
-	if (!createTiles(tmsInfo))
+    if (!writeTiles(tmsInfo))
     {
         return;
     }
@@ -264,7 +264,7 @@ void gpsinfoMainDialog::on_pushButton_create_clicked()
             xml.writeStartElement("ResourceURL");
                 xml.writeAttribute("format", format);
                 xml.writeAttribute("resourceType", "tile");
-                xml.writeAttribute("template", ui->lineEdit_URL->text() + "/" + titleAsDirectory() + "/{TileCol}/{TileRow}" + filenameEnding);
+                xml.writeAttribute("template", ui->lineEdit_URL->text() + "/" + titleAsDirectory() + "/{TileMatrix}/{TileCol}/{TileRow}" + filenameEnding);
             xml.writeEndElement();
         xml.writeEndElement();
 
@@ -279,26 +279,30 @@ void gpsinfoMainDialog::on_pushButton_create_clicked()
             std::cerr << "Writing hard-coded EPSG" << std::endl;
 //			xml.writeTextElement("ows:SupportedCRS", QString("urn:ogc:def:crs:EPSG::%1").arg(tmsInfo.m_EPSG));
             xml.writeTextElement("ows:SupportedCRS", "urn:ogc:def:crs:EPSG::31287");
-			xml.writeStartElement("TileMatrix");
-				xml.writeTextElement("ows:Identifier", "0");
-				/* See https://gis.stackexchange.com/a/315989:
-				 *			CELLSIZE in meters = ScaleDenominator * 0.00028 * (factor CRS units to m)
-				 * So a CELLSIZE of 10 in 31287 corresponds to
-				 * 			ScaleDenominator = 10 / 0.00028 = 35714.285714
-				 */
-				xml.writeTextElement("ScaleDenominator", QString("%1").arg(tmsInfo.m_pixelSize / 0.00028, 0, 'e', 10));
-				xml.writeTextElement("TopLeftCorner", QString("%1 %2").arg(tmsInfo.m_originUpperLeft.x(), 0, 'e', 10).arg(tmsInfo.m_originUpperLeft.y(), 0, 'e', 10));
-				/* Each tile has this many columns, e.g. the asc file's NCOLS */
-				xml.writeTextElement("TileWidth", QString("%1").arg(ui->spinBox_x->value()));
-				/* Each tile has this many rows, e.g. the asc file's NROWS */
-				xml.writeTextElement("TileHeight", QString("%1").arg(ui->spinBox_y->value()));
-				/* We store MatrixHeight x MatrixWidth tiles, e.g. there are
-				 * MatrixWidth subdirectories.
-				 */
-				xml.writeTextElement("MatrixWidth", QString("%1").arg(tmsInfo.m_nrTilesX));
-				/* Each subdirectory stores this many asc files. */
-				xml.writeTextElement("MatrixHeight", QString("%1").arg(tmsInfo.m_nrTilesY));
-			xml.writeEndElement();
+            for ( int i=0 ; i<static_cast< int >(tmsInfo.m_tileMatrixInfos.size()) ; ++i )
+            {
+                const auto& tmInfo = tmsInfo.m_tileMatrixInfos[i];
+                xml.writeStartElement("TileMatrix");
+                    xml.writeTextElement("ows:Identifier", "0");
+                    /* See https://gis.stackexchange.com/a/315989:
+                     *			CELLSIZE in meters = ScaleDenominator * 0.00028 * (factor CRS units to m)
+                     * So a CELLSIZE of 10 in 31287 corresponds to
+                     * 			ScaleDenominator = 10 / 0.00028 = 35714.285714
+                     */
+                    xml.writeTextElement("ScaleDenominator", QString("%1").arg(tmInfo.m_pixelSize / 0.00028, 0, 'e', 10));
+                    xml.writeTextElement("TopLeftCorner", QString("%1 %2").arg(tmInfo.m_originUpperLeft.x(), 0, 'e', 10).arg(tmInfo.m_originUpperLeft.y(), 0, 'e', 10));
+                    /* Each tile has this many columns, e.g. the asc file's NCOLS */
+                    xml.writeTextElement("TileWidth", QString("%1").arg(ui->spinBox_x->value()));
+                    /* Each tile has this many rows, e.g. the asc file's NROWS */
+                    xml.writeTextElement("TileHeight", QString("%1").arg(ui->spinBox_y->value()));
+                    /* We store MatrixHeight x MatrixWidth tiles, e.g. there are
+                     * MatrixWidth subdirectories.
+                     */
+                    xml.writeTextElement("MatrixWidth", QString("%1").arg(tmInfo.m_nrTilesX));
+                    /* Each subdirectory stores this many asc files. */
+                    xml.writeTextElement("MatrixHeight", QString("%1").arg(tmInfo.m_nrTilesY));
+                xml.writeEndElement();
+            }
         xml.writeEndElement();
 
     xml.writeEndElement();
@@ -328,7 +332,7 @@ void gpsinfoMainDialog::on_pushButton_create_clicked()
  *
  * \return True on success, false otherwise.
  */
-bool gpsinfoMainDialog::createTiles(TileMatrixSetInfo& info)
+bool gpsinfoMainDialog::writeTiles(TileMatrixSetInfo& info)
 {
 	/*
 	 * Open input file
@@ -367,48 +371,27 @@ bool gpsinfoMainDialog::createTiles(TileMatrixSetInfo& info)
 
 	const int nrXTotal = dataset->GetRasterXSize();
 	const int nrYTotal = dataset->GetRasterYSize();
-    std::vector< double > geoTransform(6);
-    dataset->GetGeoTransform(geoTransform.data());
-    /* The coordinates of the upper left corner of the upper left pixel (0,0) */
-    info.m_originUpperLeft = QPointF(geoTransform[0], geoTransform[3]);
-    const QPointF pixelSize(geoTransform[1], geoTransform[5]);
-    if (fabs(fabs(pixelSize.x()) - fabs(pixelSize.y())) > 1e-8)
-    {
-        reportError("We support raster data sets with square pixels only.");
-        GDALClose(dataset);
-        return false;
-    }
-	info.m_pixelSize = fabs(pixelSize.x());
-
-	int hasNoDataValue;
-    double noDataValue = rasterBand->GetNoDataValue(&hasNoDataValue);
-	if (!hasNoDataValue)
-	{
-		noDataValue = -9999;
-	}
-
     const int nrXTile = ui->spinBox_x->value();
     const int nrYTile = ui->spinBox_y->value();
 
-	info.m_nrTilesX = ceil(((float) nrXTotal) / nrXTile);
-	info.m_nrTilesY = ceil(((float) nrYTotal) / nrYTile);
+    /*
+     * Build overviews (e.g. zoom levels)
+     */
 
-	std::clog << "Importing " << nrXTotal << " x " << nrYTotal << " raster points "
-			  << "into " << info.m_nrTilesX << " x " << info.m_nrTilesY << " tiles, "
-			  << "each raster point of " << pixelSize.x() << " x " << pixelSize.y() << " pixel size with a "
-              << "no data value of '" << noDataValue << "'. "
-              << "Origin is at (" << info.m_originUpperLeft.x() << ", " << info.m_originUpperLeft.y() << ")." << std::endl
-			  << std::endl;
+    /* The progress bar will not update as the application blocks. */
+    ui->progressBar->setFormat(QString("Building Overviews ..."));
+    ui->progressBar->setRange(0, 0);
+    ui->progressBar->setValue(0);
 
-	ui->progressBar->setRange(0, info.m_nrTilesX*info.m_nrTilesY-1);
-	ui->progressBar->setValue(0);
+    std::clog << "Build overviews (this may take a while, and no progress is shown) ... " << std::flush;
 
     /* At the coarsest zoom level, the data shall fit into a single tile. Hence
      * we solve for
      *      nrXTotal / 2^k <  nrXTile
      */
-    int maxZoomLevel = ceil(log2(nrXTotal / nrXTile));
-    std::clog << "maxZoomLevel = " << maxZoomLevel << std::endl;
+    const int maxZoomLevelX = ceil(log2(nrXTotal / nrXTile));
+    const int maxZoomLevelY = ceil(log2(nrYTotal / nrYTile));
+    const int maxZoomLevel = std::max(maxZoomLevelX, maxZoomLevelY);
     std::vector< int > decimationFactors(maxZoomLevel-1);
     for ( int i=0 ; i<static_cast< int >(decimationFactors.size()) ; ++i )
     {
@@ -421,44 +404,126 @@ bool gpsinfoMainDialog::createTiles(TileMatrixSetInfo& info)
                             nullptr,
                             nullptr,
                             nullptr);
-    std::clog << "# overviews = " << rasterBand->GetOverviewCount() << std::endl;
-    GDALRasterBand* overviewBand0 = rasterBand->GetOverview(0);
-    std::clog << overviewBand0->GetXSize() << " x " << overviewBand0->GetYSize() << ", "
-              << overviewBand0->GetOffset() << std::endl;
 
-    /* TODO:
-     *  - find out how a pixel of overviewBand? relates to the original band
-     *  - export each overview band just as the original band to the appropriate
-     *      zoom level directory.
+    std::clog << "DONE" << std::endl;
+
+    info.m_tileMatrixInfos.resize(maxZoomLevel);
+    for (int i=0 ; i<maxZoomLevel-1 ; ++i )
+    {
+        /* Overviews are sorted in decreasing size */
+        writeTiles(dataset, rasterBand->GetOverview(maxZoomLevel-i-1), i, maxZoomLevel, info.m_tileMatrixInfos[i]);
+        if (i == 2)
+        {
+            break;
+        }
+    }
+//    writeTiles(dataset, rasterBand, maxZoomLevel, maxZoomLevel, info.m_tileMatrixInfos.back());
+
+
+    /*
+	 * Epilogue
+	 */
+
+	GDALClose(dataset);
+    GDALDestroyDriverManager();
+
+    /* This is necessary for Austria's OGD 10m. */
+    if (spatialReference.GetAxisMappingStrategy() == OAMS_AUTHORITY_COMPLIANT)
+    {
+        for ( auto& tmInfo : info.m_tileMatrixInfos )
+        {
+            tmInfo.m_originUpperLeft = QPointF(tmInfo.m_originUpperLeft.y(), tmInfo.m_originUpperLeft.x());
+        }
+    }
+
+	return true;
+}
+
+//------------------------------------------------------------------------------
+
+/*! \brief Export a single zoom level
+ *
+ */
+bool gpsinfoMainDialog::writeTiles(GDALDataset* dataset,
+                                   GDALRasterBand* rasterBand,
+                                   const int xmlZoomLevel,
+                                   const int maxZoomLevel,
+                                   TileMatrixSetInfo::TileMatrixInfo& info)
+{
+    if (!rasterBand)
+    {
+        reportError("Internal Error");
+        return false;
+    }
+
+    /* Number of pixels in the current raster band */
+    const int nrXTotal = rasterBand->GetXSize();
+    const int nrYTotal = rasterBand->GetYSize();
+    /* Number of pixels per tile */
+    const int nrXTile = ui->spinBox_x->value();
+    const int nrYTile = ui->spinBox_y->value();
+
+    /*
+     * Transformation info
      */
 
-//    GDALDataset* datasetOut = GetGDALDriverManager()->GetDriverByName("GTiff")->CreateCopy(
-//                "/tmp/all.tif",
-//                dataset,
-//                TRUE,
-//                nullptr,
-//                nullptr,
-//                nullptr);
-//    GDALClose(datasetOut);
+    std::vector< double > geoTransform(6);
+    dataset->GetGeoTransform(geoTransform.data());
+    /* The coordinates of the upper left corner of the upper left pixel (0,0) */
+    info.m_originUpperLeft = QPointF(geoTransform[0], geoTransform[3]);
+    auto& pixelSizeX = geoTransform[1];
+    pixelSizeX *= (1 << (maxZoomLevel-xmlZoomLevel));
+    auto& pixelSizeY = geoTransform[5];
+    pixelSizeY *= (1 << (maxZoomLevel-xmlZoomLevel));
+    if (fabs(fabs(pixelSizeX) - fabs(pixelSizeY)) > 1e-8)
+    {
+        reportError("We support raster data sets with square pixels only.");
+        GDALClose(dataset);
+        return false;
+    }
+    info.m_pixelSize = fabs(pixelSizeX);
 
+    int hasNoDataValue;
+    double noDataValue = rasterBand->GetNoDataValue(&hasNoDataValue);
+    if (!hasNoDataValue)
+    {
+        noDataValue = -9999;
+    }
 
-    std::clog << "DONE." << std::endl;
+    /* Number of tiles for this raster band. */
+    info.m_nrTilesX = ceil(((float) nrXTotal) / nrXTile);
+    info.m_nrTilesY = ceil(((float) nrYTotal) / nrYTile);
 
-#if 0
+    std::clog << "Writing zoom level #" << xmlZoomLevel << ": " << std::endl
+              << "\torigin = (" << info.m_originUpperLeft.x() << ", " << info.m_originUpperLeft.y() << ")." << std::endl
+              << "\t" << nrXTotal << " x " << nrYTotal << " raster points" << std::endl
+              << "\t" << info.m_nrTilesX << " x " << info.m_nrTilesY << " tiles" << std::endl
+              << "\t" << pixelSizeX << " x " << pixelSizeY<< " pixel size" << std::endl
+              << "\tno data value = '" << noDataValue << "'. " << std::endl
+              << std::endl;
+
+    ui->progressBar->setFormat(QString("Writing zoom level %1 ... %p%").arg(xmlZoomLevel));
+    ui->progressBar->setRange(0, info.m_nrTilesX*info.m_nrTilesY-1);
+    ui->progressBar->setValue(0);
+
+    /*
+     * Write the data
+     */
+
     std::vector< double > geoTransformC = geoTransform;
-	std::vector< float > data(nrXTile*nrYTile);
+    std::vector< float > data(nrXTile*nrYTile);
     /* cols run from left to right */
-	for ( int col=0 ; col<info.m_nrTilesX ; ++col )
-	{
-        QString pathCol = QString(ui->lineEdit_output->text() + "/" + titleAsDirectory() + "/%1").arg(col);
+    for ( int col=0 ; col<info.m_nrTilesX ; ++col )
+    {
+        QString pathCol = QString(ui->lineEdit_output->text() + "/" + titleAsDirectory() + "/%1/%2").arg(xmlZoomLevel).arg(col);
         QDir().mkpath(pathCol);
-        const double xLeft = info.m_originUpperLeft.x() + col*nrXTile*fabs(pixelSize.x());
+        const double xLeft = info.m_originUpperLeft.x() + col*nrXTile*fabs(pixelSizeX);
 
         /* rows run from top to bottom */
-		for ( int row=0 ; row<info.m_nrTilesY ; ++row )
-		{
-			ui->progressBar->setValue(col*info.m_nrTilesY + row);
-			QApplication::processEvents();
+        for ( int row=0 ; row<info.m_nrTilesY ; ++row )
+        {
+            ui->progressBar->setValue(col*info.m_nrTilesY + row);
+            QApplication::processEvents();
 
             std::fill(data.begin(), data.end(), noDataValue);
 
@@ -467,24 +532,24 @@ bool gpsinfoMainDialog::createTiles(TileMatrixSetInfo& info)
             int sizeY = std::min(nrYTile, nrYTotal - row*nrYTile);
 
             /* Stores data "in left to right, top to bottom pixel order". */
-			CPLErr err = rasterBand->RasterIO(GF_Read,
-											  col*nrXTile,
-											  row*nrYTile,
-											  sizeX,
-											  sizeY,
-											  data.data(),
+            CPLErr err = rasterBand->RasterIO(GF_Read,
+                                              col*nrXTile,
+                                              row*nrYTile,
                                               sizeX,
                                               sizeY,
-											  GDT_Float32,
-											  0,
+                                              data.data(),
+                                              sizeX,
+                                              sizeY,
+                                              GDT_Float32,
+                                              0,
                                               sizeof(float)*nrXTile,
-											  nullptr);
-			if (err != CE_None)
-			{
-				reportError("We failed to read data from '" + ui->lineEdit_input->text() + "'.");
-				GDALClose(dataset);
-				return false;
-			}
+                                              nullptr);
+            if (err != CE_None)
+            {
+                reportError("We failed to read data from '" + ui->lineEdit_input->text() + "'.");
+                GDALClose(dataset);
+                return false;
+            }
 
             /* Write to ASC file. */
             if (ui->combo_tileFormat->currentIndex() == 0)
@@ -510,7 +575,7 @@ bool gpsinfoMainDialog::createTiles(TileMatrixSetInfo& info)
                             papszOptions);
                 /* The coordinates of the upper left corner of the upper left pixel (0,0) */
                 geoTransformC[0] = xLeft;
-                geoTransformC[3] = info.m_originUpperLeft.y() - row*nrYTile*fabs(pixelSize.y());
+                geoTransformC[3] = info.m_originUpperLeft.y() - row*nrYTile*fabs(pixelSizeY);
                 datasetOut->SetGeoTransform(geoTransformC.data());
                 datasetOut->SetProjection(dataset->GetProjectionRef());
                 datasetOut->GetRasterBand(1)->SetNoDataValue(noDataValue);
@@ -540,8 +605,8 @@ bool gpsinfoMainDialog::createTiles(TileMatrixSetInfo& info)
                 if (!writeASC(nrXTile,
                               nrYTile,
                               xLeft,
-                              info.m_originUpperLeft.y() - (row+1)*nrYTile*fabs(pixelSize.y()),
-                              fabs(pixelSize.x()),
+                              info.m_originUpperLeft.y() - (row+1)*nrYTile*fabs(pixelSizeY),
+                              fabs(pixelSizeX),
                               noDataValue,
                               data,
                               pathCol,
@@ -559,23 +624,10 @@ bool gpsinfoMainDialog::createTiles(TileMatrixSetInfo& info)
                 GDALClose(dataset);
                 return false;
             }
-		}
-	}
-#endif
-    /*
-	 * Epilogue
-	 */
-
-	GDALClose(dataset);
-    GDALDestroyDriverManager();
-
-    /* This is necessary for Austria's OGD 10m. */
-    if (spatialReference.GetAxisMappingStrategy() == OAMS_AUTHORITY_COMPLIANT)
-    {
-        info.m_originUpperLeft = QPointF(info.m_originUpperLeft.y(), info.m_originUpperLeft.x());
+        }
     }
 
-	return true;
+    return true;
 }
 
 //------------------------------------------------------------------------------

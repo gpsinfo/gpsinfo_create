@@ -22,6 +22,8 @@
 
 //------------------------------------------------------------------------------
 
+#include <vector>
+
 #include <QPointF>
 
 //------------------------------------------------------------------------------
@@ -35,17 +37,24 @@ struct TileMatrixSetInfo
 	/*! The input file's EPSG code. */
 	int m_EPSG;
 
-	/*! Size of a pixel in the units of the input file. */
-	double m_pixelSize;
+    /*! Struct describing a single TileMatrix entity. */
+    struct TileMatrixInfo
+    {
+        /*! Size of a pixel in the units of the input file. */
+        double m_pixelSize;
 
-	/*! Coordinates of the upper left corner. */
-	QPointF m_originUpperLeft;
+        /*! Coordinates of the upper left corner. */
+        QPointF m_originUpperLeft;
 
-	/*! Number of tiles in horizontal direction */
-	int m_nrTilesX;
+        /*! Number of tiles in horizontal direction */
+        int m_nrTilesX;
 
-	/*! Number of tiles in vertical direction */
-	int m_nrTilesY;
+        /*! Number of tiles in vertical direction */
+        int m_nrTilesY;
+    };
+
+    /*! All TileMatrix entities of this TileMatrixSet entity. */
+    std::vector< TileMatrixInfo > m_tileMatrixInfos;
 };
 
 //------------------------------------------------------------------------------

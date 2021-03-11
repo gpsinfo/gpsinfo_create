@@ -28,6 +28,11 @@
 
 //------------------------------------------------------------------------------
 
+class GDALDataset;
+class GDALRasterBand;
+
+//------------------------------------------------------------------------------
+
 namespace Ui {
 	class gpsinfoMainDialog;
 }
@@ -68,7 +73,13 @@ private:
 
     //--------------------------------------------------------------------------
 
-    bool createTiles(TileMatrixSetInfo&);
+    bool writeTiles(TileMatrixSetInfo&);
+    bool writeTiles(GDALDataset*,
+                    GDALRasterBand*,
+                    const int,
+                    const int,
+                    TileMatrixSetInfo::TileMatrixInfo&);
+
     bool writeASC(const int,
                   const int,
                   const double,
