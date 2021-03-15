@@ -283,7 +283,7 @@ void gpsinfoMainDialog::on_pushButton_create_clicked()
             {
                 const auto& tmInfo = tmsInfo.m_tileMatrixInfos[i];
                 xml.writeStartElement("TileMatrix");
-                    xml.writeTextElement("ows:Identifier", "0");
+                    xml.writeTextElement("ows:Identifier", QString("%1").arg(i));
                     /* See https://gis.stackexchange.com/a/315989:
                      *			CELLSIZE in meters = ScaleDenominator * 0.00028 * (factor CRS units to m)
                      * So a CELLSIZE of 10 in 31287 corresponds to
@@ -383,7 +383,7 @@ bool gpsinfoMainDialog::writeTiles(TileMatrixSetInfo& info)
     ui->progressBar->setRange(0, 0);
     ui->progressBar->setValue(0);
 
-    std::clog << "Build overviews (this may take a while, and no progress is shown) ... " << std::flush;
+    std::clog << "Building overviews (this may take a while, and no progress is shown) ... " << std::flush;
 
     /* At the coarsest zoom level, the data shall fit into a single tile. Hence
      * we solve for
@@ -419,7 +419,7 @@ bool gpsinfoMainDialog::writeTiles(TileMatrixSetInfo& info)
         /* Overviews are sorted in decreasing size */
         writeTiles(dataset, rasterBand->GetOverview(maxZoomLevel-i-2), i, maxZoomLevel, info.m_tileMatrixInfos[i]);
     }
-    writeTiles(dataset, rasterBand, maxZoomLevel, maxZoomLevel, info.m_tileMatrixInfos.back());
+    writeTiles(dataset, rasterBand, maxZoomLevel-1, maxZoomLevel, info.m_tileMatrixInfos.back());
 
     /*
 	 * Epilogue
@@ -506,6 +506,8 @@ bool gpsinfoMainDialog::writeTiles(GDALDataset* dataset,
     ui->progressBar->setFormat(QString("Writing zoom level %1 of %2 ... %p%").arg(xmlZoomLevel).arg(maxZoomLevel));
     ui->progressBar->setRange(0, info.m_nrTilesX*info.m_nrTilesY-1);
     ui->progressBar->setValue(0);
+
+    return true;
 
     /*
      * Write the data
