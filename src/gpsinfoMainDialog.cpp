@@ -473,9 +473,9 @@ bool gpsinfoMainDialog::writeTiles(GDALDataset* dataset,
     /* The coordinates of the upper left corner of the upper left pixel (0,0) */
     info.m_originUpperLeft = QPointF(geoTransform[0], geoTransform[3]);
     auto& pixelSizeX = geoTransform[1];
-    pixelSizeX *= (1 << (maxZoomLevel-xmlZoomLevel));
+    pixelSizeX *= (1 << (maxZoomLevel-xmlZoomLevel-1));
     auto& pixelSizeY = geoTransform[5];
-    pixelSizeY *= (1 << (maxZoomLevel-xmlZoomLevel));
+    pixelSizeY *= (1 << (maxZoomLevel-xmlZoomLevel-1));
     if (fabs(fabs(pixelSizeX) - fabs(pixelSizeY)) > 1e-8)
     {
         reportError("We support raster data sets with square pixels only.");
