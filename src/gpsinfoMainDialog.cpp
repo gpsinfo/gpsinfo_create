@@ -418,8 +418,9 @@ bool gpsinfoMainDialog::writeTiles(TileMatrixSetInfo& info)
     {
         /* Overviews are sorted in decreasing size */
         writeTiles(dataset, rasterBand->GetOverview(maxZoomLevel-i-2), i, maxZoomLevel, info.m_tileMatrixInfos[i]);
+        break;
     }
-    writeTiles(dataset, rasterBand, maxZoomLevel-1, maxZoomLevel, info.m_tileMatrixInfos.back());
+//    writeTiles(dataset, rasterBand, maxZoomLevel-1, maxZoomLevel, info.m_tileMatrixInfos.back());
 
     /*
 	 * Epilogue
@@ -506,8 +507,6 @@ bool gpsinfoMainDialog::writeTiles(GDALDataset* dataset,
     ui->progressBar->setFormat(QString("Writing zoom level %1 of %2 ... %p%").arg(xmlZoomLevel).arg(maxZoomLevel));
     ui->progressBar->setRange(0, info.m_nrTilesX*info.m_nrTilesY-1);
     ui->progressBar->setValue(0);
-
-    return true;
 
     /*
      * Write the data
@@ -599,6 +598,7 @@ bool gpsinfoMainDialog::writeTiles(GDALDataset* dataset,
                     GDALClose(dataset);
                     return false;
                 }
+                datasetOut->GetRasterBand(1)->ComputeStatistics(FALSE, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr);
                 GDALClose(datasetOut);
             }
             else if ((ui->combo_tileFormat->currentIndex() == 1) ||
