@@ -320,6 +320,10 @@ void gpsinfoMainDialog::on_pushButton_create_clicked()
 
     file.close();
 
+    std::clog << "We are DONE." << std::endl;
+    ui->progressBar->setFormat(QString("DONE"));
+    ui->progressBar->setRange(0, 0);
+    ui->progressBar->setValue(0);
 	ui->progressBar->setEnabled(false);
 }
 
@@ -418,9 +422,8 @@ bool gpsinfoMainDialog::writeTiles(TileMatrixSetInfo& info)
     {
         /* Overviews are sorted in decreasing size */
         writeTiles(dataset, rasterBand->GetOverview(maxZoomLevel-i-2), i, maxZoomLevel, info.m_tileMatrixInfos[i]);
-        break;
     }
-//    writeTiles(dataset, rasterBand, maxZoomLevel-1, maxZoomLevel, info.m_tileMatrixInfos.back());
+    writeTiles(dataset, rasterBand, maxZoomLevel-1, maxZoomLevel, info.m_tileMatrixInfos.back());
 
     /*
 	 * Epilogue
@@ -598,7 +601,10 @@ bool gpsinfoMainDialog::writeTiles(GDALDataset* dataset,
                     GDALClose(dataset);
                     return false;
                 }
-                datasetOut->GetRasterBand(1)->ComputeStatistics(FALSE, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr);
+                if (!std::all_of(data.begin(), data.end(), [noDataValue](float value) { return value==noDataValue; }))
+                {
+                    datasetOut->GetRasterBand(1)->ComputeStatistics(FALSE, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr);
+                }
                 GDALClose(datasetOut);
             }
             else if ((ui->combo_tileFormat->currentIndex() == 1) ||
