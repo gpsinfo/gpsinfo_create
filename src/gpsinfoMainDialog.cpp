@@ -322,8 +322,8 @@ void gpsinfoMainDialog::on_pushButton_create_clicked()
 
     std::clog << "We are DONE." << std::endl;
     ui->progressBar->setFormat(QString("DONE"));
-    ui->progressBar->setRange(0, 0);
-    ui->progressBar->setValue(0);
+    ui->progressBar->setRange(0, 100);
+    ui->progressBar->setValue(100);
 	ui->progressBar->setEnabled(false);
 }
 
@@ -507,7 +507,7 @@ bool gpsinfoMainDialog::writeTiles(GDALDataset* dataset,
               << "\tno data value = '" << noDataValue << "'. " << std::endl
               << std::endl;
 
-    ui->progressBar->setFormat(QString("Writing zoom level %1 of %2 ... %p%").arg(xmlZoomLevel).arg(maxZoomLevel));
+    ui->progressBar->setFormat(QString("Writing zoom level %1 of %2 ... %p%").arg(xmlZoomLevel).arg(maxZoomLevel-1));
     ui->progressBar->setRange(0, info.m_nrTilesX*info.m_nrTilesY-1);
     ui->progressBar->setValue(0);
 
