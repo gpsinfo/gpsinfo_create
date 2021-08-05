@@ -276,9 +276,12 @@ void gpsinfoMainDialog::on_pushButton_create_clicked()
 			xml.writeTextElement("ows:Title", ui->lineEdit_title->text());
 			/* This is referenced from above */
 			xml.writeTextElement("ows:Identifier", ui->lineEdit_title->text());
-            std::cerr << "Writing hard-coded EPSG" << std::endl;
-//			xml.writeTextElement("ows:SupportedCRS", QString("urn:ogc:def:crs:EPSG::%1").arg(tmsInfo.m_EPSG));
-            xml.writeTextElement("ows:SupportedCRS", "urn:ogc:def:crs:EPSG::31287");
+#if 1
+			xml.writeTextElement("ows:SupportedCRS", QString("urn:ogc:def:crs:EPSG::%1").arg(tmsInfo.m_EPSG));
+#else
+			std::cerr << "Writing hard-coded EPSG" << std::endl;
+			xml.writeTextElement("ows:SupportedCRS", "urn:ogc:def:crs:EPSG::31287");
+#endif
             for ( int i=0 ; i<static_cast< int >(tmsInfo.m_tileMatrixInfos.size()) ; ++i )
             {
                 const auto& tmInfo = tmsInfo.m_tileMatrixInfos[i];
@@ -378,6 +381,7 @@ bool gpsinfoMainDialog::writeTiles(TileMatrixSetInfo& info)
     const int nrXTile = ui->spinBox_x->value();
     const int nrYTile = ui->spinBox_y->value();
 
+#if 0
     /*
      * Build overviews (e.g. zoom levels)
      */
@@ -416,6 +420,15 @@ bool gpsinfoMainDialog::writeTiles(TileMatrixSetInfo& info)
     }
 
     std::clog << "DONE" << std::endl;
+
+#else
+	/*
+	 * Query existing overviews (e.g. zoom levels)
+	 */
+
+	const int maxZoomLevel = rasterBand->GetOverviewCount();
+
+#endif
 
     info.m_tileMatrixInfos.resize(maxZoomLevel);
     for (int i=0 ; i<maxZoomLevel-1 ; ++i )
@@ -556,7 +569,7 @@ bool gpsinfoMainDialog::writeTiles(GDALDataset* dataset,
                 return false;
             }
 
-            /* Write to ASC file. */
+			/* Write to GeoTIFF file. */
             if (ui->combo_tileFormat->currentIndex() == 0)
             {
 
@@ -605,7 +618,7 @@ bool gpsinfoMainDialog::writeTiles(GDALDataset* dataset,
                 {
                     datasetOut->GetRasterBand(1)->ComputeStatistics(FALSE, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr);
                 }
-                GDALClose(datasetOut);
+				GDALClose(datasetOut);
             }
             else if ((ui->combo_tileFormat->currentIndex() == 1) ||
                      (ui->combo_tileFormat->currentIndex() == 2))
