@@ -47,6 +47,7 @@ gpsinfoMainDialog::gpsinfoMainDialog(QWidget *parent) :
 
     QSettings settings;
     ui->lineEdit_input->setText(settings.value("filenameInput", "").toString());
+    ui->combo_epsg->setCurrentIndex(settings.value("epsg", 0).toInt());
     ui->lineEdit_output->setText(settings.value("directoryOutput", "").toString());
     ui->combo_tileFormat->setCurrentIndex(settings.value("tileFormatIndex", 0).toInt());
     ui->checkbox_createOverviews->setChecked(settings.value("createOverviews", false).toBool());
@@ -139,6 +140,7 @@ void gpsinfoMainDialog::on_pushButton_create_clicked()
 
     QSettings settings;
 	settings.setValue("filenameInput", ui->lineEdit_input->text());
+    settings.setValue("epsg", ui->combo_epsg->currentIndex());
 	settings.setValue("directoryOutput", ui->lineEdit_output->text());
     settings.setValue("tileFormatIndex", ui->combo_tileFormat->currentIndex());
     settings.setValue("createOverviews", ui->checkbox_createOverviews->isChecked());
@@ -276,12 +278,26 @@ void gpsinfoMainDialog::on_pushButton_create_clicked()
 			xml.writeTextElement("ows:Title", ui->lineEdit_title->text());
 			/* This is referenced from above */
 			xml.writeTextElement("ows:Identifier", ui->lineEdit_title->text());
-#if 1
-			xml.writeTextElement("ows:SupportedCRS", QString("urn:ogc:def:crs:EPSG::%1").arg(tmsInfo.m_EPSG));
-#else
-			std::cerr << "Writing hard-coded EPSG" << std::endl;
-			xml.writeTextElement("ows:SupportedCRS", "urn:ogc:def:crs:EPSG::31287");
-#endif
+            switch (ui->combo_epsg->currentIndex())
+            {
+            case 0:
+                /* AT_OGD */
+                xml.writeTextElement("ows:SupportedCRS", "urn:ogc:def:crs:EPSG::31287");
+                break;
+            case 1:
+                /* DE_NRW */
+                xml.writeTextElement("ows:SupportedCRS", "urn:ogc:def:crs:EPSG::25832");
+                break;
+            case 2:
+                /* IT_BZ */
+                xml.writeTextElement("ows:SupportedCRS", "urn:ogc:def:crs:EPSG::32632");
+                break;
+            default:
+                /* auto-detect */
+                xml.writeTextElement("ows:SupportedCRS", QString("urn:ogc:def:crs:EPSG::%1").arg(tmsInfo.m_EPSG));
+//                reportError("Unknown or unsupported file format.");
+//                return;
+            }
             for ( int i=0 ; i<static_cast< int >(tmsInfo.m_tileMatrixInfos.size()) ; ++i )
             {
                 const auto& tmInfo = tmsInfo.m_tileMatrixInfos[i];
