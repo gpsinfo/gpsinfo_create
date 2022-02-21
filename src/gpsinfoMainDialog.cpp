@@ -47,6 +47,7 @@ gpsinfoMainDialog::gpsinfoMainDialog(QWidget *parent) :
 
     QSettings settings;
     ui->lineEdit_input->setText(settings.value("filenameInput", "").toString());
+	ui->checkbox_swapAxis->setChecked(settings.value("swapAxis", false).toBool());
     ui->combo_epsg->setCurrentIndex(settings.value("epsg", 0).toInt());
     ui->lineEdit_output->setText(settings.value("directoryOutput", "").toString());
     ui->combo_tileFormat->setCurrentIndex(settings.value("tileFormatIndex", 0).toInt());
@@ -140,6 +141,7 @@ void gpsinfoMainDialog::on_pushButton_create_clicked()
 
     QSettings settings;
 	settings.setValue("filenameInput", ui->lineEdit_input->text());
+	settings.setValue("swapAxis", ui->checkbox_swapAxis->isChecked());
     settings.setValue("epsg", ui->combo_epsg->currentIndex());
 	settings.setValue("directoryOutput", ui->lineEdit_output->text());
     settings.setValue("tileFormatIndex", ui->combo_tileFormat->currentIndex());
@@ -239,17 +241,18 @@ void gpsinfoMainDialog::on_pushButton_create_clicked()
 			 */
             QString format, filenameEnding;
             switch (ui->combo_tileFormat->currentIndex())
-            {
-            case 0:
+			{
+			case 0:
+			case 1:
                 /* https://github.com/opengeospatial/geotiff/issues/34 (Jun 19, 2019) */
                 format = "image/tiff; application=geotiff";
                 filenameEnding = ".tif";
                 break;
-            case 1:
+			case 2:
                 format = "text/plain";
                 filenameEnding = ".asc";
                 break;
-            case 2:
+			case 3:
                 format = "application/zip";
                 filenameEnding = ".asc.zip";
                 break;
@@ -385,19 +388,24 @@ bool gpsinfoMainDialog::writeTiles(TileMatrixSetInfo& info)
 		return false;
 	}
 
+	/* AT_OGD is tricky, as it seems to explicitely swap coordinate axis, see
+	 * the output of gdalinfo.
+	 */
 	OGRSpatialReference spatialReference(dataset->GetProjectionRef());
+//	spatialReference.AutoIdentifyEPSG();
 	info.m_EPSG = QString(spatialReference.GetAttrValue("AUTHORITY", 1)).toInt();
+
 
 	/*
 	 * Process input file
 	 */
 
+#if 0
 	const int nrXTotal = dataset->GetRasterXSize();
 	const int nrYTotal = dataset->GetRasterYSize();
     const int nrXTile = ui->spinBox_x->value();
     const int nrYTile = ui->spinBox_y->value();
 
-#if 0
     /*
      * Build overviews (e.g. zoom levels)
      */
@@ -450,9 +458,9 @@ bool gpsinfoMainDialog::writeTiles(TileMatrixSetInfo& info)
     for (int i=0 ; i<maxZoomLevel-1 ; ++i )
     {
         /* Overviews are sorted in decreasing size */
-        writeTiles(dataset, rasterBand->GetOverview(maxZoomLevel-i-2), i, maxZoomLevel, info.m_tileMatrixInfos[i]);
+		writeTiles(dataset, rasterBand->GetOverview(maxZoomLevel-i-2), i, maxZoomLevel, info.m_tileMatrixInfos[i]);
     }
-    writeTiles(dataset, rasterBand, maxZoomLevel-1, maxZoomLevel, info.m_tileMatrixInfos.back());
+	writeTiles(dataset, rasterBand, maxZoomLevel-1, maxZoomLevel, info.m_tileMatrixInfos.back());
 
     /*
 	 * Epilogue
@@ -461,14 +469,16 @@ bool gpsinfoMainDialog::writeTiles(TileMatrixSetInfo& info)
 	GDALClose(dataset);
     GDALDestroyDriverManager();
 
-    /* This is necessary for Austria's OGD 10m. */
-    if (spatialReference.GetAxisMappingStrategy() == OAMS_AUTHORITY_COMPLIANT)
-    {
-        for ( auto& tmInfo : info.m_tileMatrixInfos )
-        {
-            tmInfo.m_originUpperLeft = QPointF(tmInfo.m_originUpperLeft.y(), tmInfo.m_originUpperLeft.x());
-        }
-    }
+	/* This is necessary for Austria's OGD 10m, which explicetely swaps axis
+	 * w.r.t. the standard.
+	 */
+	if (ui->checkbox_swapAxis->isChecked())
+	{
+		for ( auto& tmInfo : info.m_tileMatrixInfos )
+		{
+			tmInfo.m_originUpperLeft = QPointF(tmInfo.m_originUpperLeft.y(), tmInfo.m_originUpperLeft.x());
+		}
+	}
 
 	return true;
 }
@@ -586,7 +596,8 @@ bool gpsinfoMainDialog::writeTiles(GDALDataset* dataset,
             }
 
 			/* Write to GeoTIFF file. */
-            if (ui->combo_tileFormat->currentIndex() == 0)
+			if ((ui->combo_tileFormat->currentIndex() == 0) ||
+				(ui->combo_tileFormat->currentIndex() == 1))
             {
 
                 /* See
@@ -599,7 +610,10 @@ bool gpsinfoMainDialog::writeTiles(GDALDataset* dataset,
                  */
                 const QString filename = QString("%1/%2.tif").arg(pathCol).arg(row);
                 char **papszOptions = nullptr;
-                papszOptions = CSLSetNameValue(papszOptions, "COMPRESS", "LZW");
+				if (ui->combo_tileFormat->currentIndex() == 1)
+				{
+					papszOptions = CSLSetNameValue(papszOptions, "COMPRESS", "LZW");
+				}
                 GDALDataset* datasetOut = GetGDALDriverManager()->GetDriverByName("GTiff")->Create(
                             filename.toStdString().c_str(),
                             nrXTile,
@@ -636,8 +650,8 @@ bool gpsinfoMainDialog::writeTiles(GDALDataset* dataset,
                 }
 				GDALClose(datasetOut);
             }
-            else if ((ui->combo_tileFormat->currentIndex() == 1) ||
-                     (ui->combo_tileFormat->currentIndex() == 2))
+			else if ((ui->combo_tileFormat->currentIndex() == 2) ||
+					 (ui->combo_tileFormat->currentIndex() == 3))
             {
                 const QString filename = QString("%1.asc").arg(row);
                 if (!writeASC(nrXTile,
@@ -649,7 +663,7 @@ bool gpsinfoMainDialog::writeTiles(GDALDataset* dataset,
                               data,
                               pathCol,
                               filename,
-                              ui->combo_tileFormat->currentIndex() == 2))
+							  ui->combo_tileFormat->currentIndex() == 3))
                 {
                     reportError("We failed to write tile '" + filename + "'.");
                     GDALClose(dataset);
