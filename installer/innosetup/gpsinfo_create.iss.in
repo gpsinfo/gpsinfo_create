@@ -1,3 +1,6 @@
+; Open this file in the innosetup GUI, available from 
+; 		https://jrsoftware.org/isinfo.php
+;
 ; For help, google key and innosetup, e.g. "innosetup WizardImageFile"
 ;
 ; A list of constants is found here: http://www.jrsoftware.org/ishelp/topic_consts.htm

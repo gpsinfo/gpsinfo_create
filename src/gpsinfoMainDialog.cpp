@@ -1,5 +1,5 @@
 /*
- * (c) 2019 Rechenraum GmbH (office@rechenraum.com)
+ * (c) 2022 Rechenraum GmbH (office@rechenraum.com)
  *
  * This file is part of gpsinfo (www.gpsinfo.org).
  *
@@ -78,6 +78,8 @@ gpsinfoMainDialog::~gpsinfoMainDialog()
 
 //------------------------------------------------------------------------------
 
+/*! \brief Signal handler for 'quit' button
+ */
 void gpsinfoMainDialog::on_pushButton_quit_clicked()
 {
 	QApplication::quit();
@@ -85,6 +87,8 @@ void gpsinfoMainDialog::on_pushButton_quit_clicked()
 
 //------------------------------------------------------------------------------
 
+/*! \brief Signal handler to select input file
+ */
 void gpsinfoMainDialog::on_pushButton_input_clicked()
 {
     QSettings settings;
@@ -99,6 +103,8 @@ void gpsinfoMainDialog::on_pushButton_input_clicked()
 
 //------------------------------------------------------------------------------
 
+/*! \brief Signal handler to select output directory
+ */
 void gpsinfoMainDialog::on_pushButton_output_clicked()
 {
     QSettings settings;
@@ -113,6 +119,8 @@ void gpsinfoMainDialog::on_pushButton_output_clicked()
 
 //------------------------------------------------------------------------------
 
+/*! \brief Generic error handler (e.g. reporting)
+ */
 void gpsinfoMainDialog::reportError(const QString& message)
 {
     std::cerr << "gpsinfo_create reported an error: '"
@@ -121,6 +129,8 @@ void gpsinfoMainDialog::reportError(const QString& message)
 
 //------------------------------------------------------------------------------
 
+/*! \brief Signal handler to start processing
+ */
 void gpsinfoMainDialog::on_pushButton_create_clicked()
 {
 	ui->progressBar->setEnabled(true);
@@ -487,6 +497,13 @@ bool gpsinfoMainDialog::writeTiles(TileMatrixSetInfo& info)
 
 /*! \brief Export a single zoom level
  *
+ * \param dataset GDAL dataset we are working on
+ * \param rasterBand Raster band in dataset to work on
+ * \param xmlZoomLevel Current zoom-level to process
+ * \param maxZoomLevel Maximal zoom-level
+ * \param info (out) Tile information
+ * 
+ * \return True on success, false otherwise.
  */
 bool gpsinfoMainDialog::writeTiles(GDALDataset* dataset,
                                    GDALRasterBand* rasterBand,

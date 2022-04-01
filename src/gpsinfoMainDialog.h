@@ -1,5 +1,5 @@
 /*
- * (c) 2019 Rechenraum GmbH (office@rechenraum.com)
+ * (c) 2022 Rechenraum GmbH (office@rechenraum.com)
  *
  * This file is part of gpsinfo (www.gpsinfo.org).
  *

@@ -1,12 +1,14 @@
 if (WIN32)
 	# Download from
 	#	https://www.qt.io/
-	set(QT5_PATH "C:/Qt/5.12.4/msvc2017_64")
+	set(QT5_PATH "C:/Qt/Qt5.12.12/5.12.12/msvc2017_64")
 
 	# Download 
-	#	http://download.gisinternals.com/sdk/downloads/release-1911-x64-gdal-2-4-2-mapserver-7-4-0-libs.zip
-	# and unpack to a folder named 'gdal-2.4.2-vs2017-x64'
-	set(GDAL_DIR "$ENV{UserProfile}/Desktop/src/gdal-2.4.2-vs2017-x64")
+	#	https://download.gisinternals.com/sdk/downloads/release-1916-x64-gdal-3-4-2-mapserver-7-6-4.zip
+	# and
+	#	https://download.gisinternals.com/sdk/downloads/release-1928-x64-gdal-3-4-2-mapserver-7-6-4-libs.zip
+	# and unpack to a folder named 'gdal-3.4.2-vs2019-x64'
+	set(GDAL_DIR "$ENV{UserProfile}/Desktop/src/gdal-3.4.2-vs2019-x64")
 
 	# Shall point to the directory with the exe and its deps
 	set(GPSINFO_CREATE_INSTALL_PATH "$ENV{UserProfile}/Desktop/gpsinfo_create_env")
